@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Build outputs and test coverage
+dist/
+build/
+coverage/
+web-build/
+
+# Expo and React Native generated files
+.expo/
+.expo-shared/
+android/app/build/
+android/.gradle/
+ios/build/
+ios/Pods/
+
+# Tool caches
+.cache/
+.parcel-cache/
+.turbo/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local IDE and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
