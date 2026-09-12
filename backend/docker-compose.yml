@@ -15,6 +15,12 @@ services:
     volumes:
       - dating_postgres_data:/var/lib/postgresql/data
 
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dating_user -d dating_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   redis:
     image: redis:7
     container_name: dating_redis
@@ -22,6 +28,38 @@ services:
 
     ports:
       - "6379:6379"
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mello_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      PORT: ${PORT:-4000}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: dating_db
+      DB_USER: dating_user
+      DB_PASSWORD: dating_password
+      REDIS_URL: redis://redis:6379
+    command: ["sh", "-c", "npm run db:migrate && npm run db:seed && npm start"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${PORT:-4000}:${PORT:-4000}"
 
 volumes:
   dating_postgres_data:
