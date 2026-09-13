@@ -1,6 +1,7 @@
 export * from './account.repository';
 export * from './account-role.repository';
 export * from './auth-identity.repository';
+export * from './authentication.repository';
 export * from './media.repository';
 export * from './otp-challenge.repository';
 export * from './partner.repository';

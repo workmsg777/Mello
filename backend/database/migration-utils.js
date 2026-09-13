@@ -15,7 +15,13 @@ function timestamps(DataTypes, paranoid = false) {
   return columns;
 }
 
-async function addComments(queryInterface, table, tableComment, columnComments, transaction) {
+async function addComments(
+  queryInterface,
+  table,
+  tableComment,
+  columnComments,
+  transaction,
+) {
   const quotedTable = quoteIdentifier(table);
   await queryInterface.sequelize.query(
     `COMMENT ON TABLE ${quotedTable} IS ${queryInterface.sequelize.escape(tableComment)}`,
@@ -31,7 +37,10 @@ async function addComments(queryInterface, table, tableComment, columnComments, 
 
 async function dropEnums(queryInterface, names, transaction) {
   for (const name of names) {
-    await queryInterface.sequelize.query(`DROP TYPE IF EXISTS ${quoteIdentifier(name)}`, { transaction });
+    await queryInterface.sequelize.query(
+      `DROP TYPE IF EXISTS ${quoteIdentifier(name)}`,
+      { transaction },
+    );
   }
 }
 

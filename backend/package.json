@@ -6,6 +6,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "format": "prettier --write \"src/**/*.ts\" \"database/**/*.js\" \"*.{json,yml,yaml}\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"database/**/*.js\" \"*.{json,yml,yaml}\"",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "db:migrate": "sequelize-cli db:migrate",
@@ -27,6 +29,7 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.4.1",
+    "prettier": "^3.9.6",
     "sequelize-cli": "^6.6.5",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"
