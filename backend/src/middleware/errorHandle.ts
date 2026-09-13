@@ -30,7 +30,7 @@ const validationMessage = (errors: ErrorLike['errors']): string | undefined => {
 
 /** Final Express error handler, adapted from Novixer's shared core middleware. */
 export const errorHandle: ErrorRequestHandler = (error, req, res, next) => {
-  if (res.writableEnded || req.destroyed) return;
+  if (res.writableEnded || res.destroyed) return;
   if (res.headersSent) {
     next(error);
     return;

@@ -2,6 +2,9 @@
 
 Expo mobile client for dating-user phone authentication.
 
+This root Expo project is exclusively the dating-user app. The separately
+installable partner application is located at [`apps/partner`](./apps/partner).
+
 ## Run on an Android phone
 
 1. Start PostgreSQL and Redis, then start the backend on port `4000`.
