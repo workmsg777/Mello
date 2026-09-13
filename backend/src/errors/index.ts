@@ -4,6 +4,7 @@ import { CustomApiError } from './customApiError';
 import { ForbiddenError } from './forbidden';
 import { NotFoundError } from './notFound';
 import { SystemError } from './systemError';
+import { TooManyRequestsError } from './tooManyRequests';
 import { UnauthorizedError } from './unauthorized';
 
 export {
@@ -13,6 +14,7 @@ export {
   ForbiddenError,
   NotFoundError,
   SystemError,
+  TooManyRequestsError,
   UnauthorizedError,
 };
 
@@ -24,6 +26,7 @@ const Errors = {
   ForbiddenError,
   NotFoundError,
   SystemError,
+  TooManyRequestsError,
   UnauthorizedError,
 };
 
