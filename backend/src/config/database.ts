@@ -6,7 +6,9 @@ export const sequelize = process.env.DATABASE_URL
   ? new Sequelize(process.env.DATABASE_URL, {
       dialect: 'postgres',
       logging: false,
-      dialectOptions: useSsl ? { ssl: { require: true, rejectUnauthorized: false } } : {},
+      dialectOptions: useSsl
+        ? { ssl: { require: true, rejectUnauthorized: false } }
+        : {},
     })
   : new Sequelize({
       dialect: 'postgres',
@@ -16,7 +18,9 @@ export const sequelize = process.env.DATABASE_URL
       username: process.env.DB_USER ?? 'dating_user',
       password: process.env.DB_PASSWORD ?? 'dating_password',
       logging: false,
-      dialectOptions: useSsl ? { ssl: { require: true, rejectUnauthorized: false } } : {},
+      dialectOptions: useSsl
+        ? { ssl: { require: true, rejectUnauthorized: false } }
+        : {},
       define: { underscored: true, freezeTableName: true },
     });
 

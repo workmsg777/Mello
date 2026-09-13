@@ -3,9 +3,21 @@
 const { randomUUID } = require('node:crypto');
 
 const roles = [
-  { code: 'CUSTOMER', name: 'Customer', description: 'Normal Mello dating application user.' },
-  { code: 'ADMIN', name: 'Administrator', description: 'Internal Mello administrator.' },
-  { code: 'SUPERADMIN', name: 'Super Administrator', description: 'Highest-level Mello administrative access.' },
+  {
+    code: 'CUSTOMER',
+    name: 'Customer',
+    description: 'Normal Mello dating application user.',
+  },
+  {
+    code: 'ADMIN',
+    name: 'Administrator',
+    description: 'Internal Mello administrator.',
+  },
+  {
+    code: 'SUPERADMIN',
+    name: 'Super Administrator',
+    description: 'Highest-level Mello administrative access.',
+  },
 ];
 
 module.exports = {

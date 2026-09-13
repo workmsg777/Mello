@@ -6,18 +6,44 @@ const { Sequelize, QueryTypes } = require('sequelize');
 const configs = require('./config');
 
 const expectedTables = [
-  'account_roles', 'accounts', 'auth_identities', 'media', 'otp_challenges',
-  'partner_photos', 'partner_users', 'partners', 'platform_users', 'roles',
-  'user_photos', 'user_sessions', 'users',
+  'account_roles',
+  'accounts',
+  'auth_identities',
+  'media',
+  'otp_challenges',
+  'partner_photos',
+  'partner_users',
+  'partners',
+  'platform_users',
+  'roles',
+  'user_photos',
+  'user_sessions',
+  'users',
 ];
 
 const expectedEnums = {
   enum_accounts_account_type: ['DATING_USER', 'PARTNER_USER', 'PLATFORM_USER'],
-  enum_accounts_status: ['PENDING', 'ACTIVE', 'SUSPENDED', 'BLOCKED', 'DEACTIVATED', 'DELETED'],
+  enum_accounts_status: [
+    'PENDING',
+    'ACTIVE',
+    'SUSPENDED',
+    'BLOCKED',
+    'DEACTIVATED',
+    'DELETED',
+  ],
   enum_auth_identities_provider: ['PHONE', 'EMAIL', 'GOOGLE', 'APPLE'],
   enum_media_media_type: ['IMAGE', 'VIDEO', 'AUDIO', 'OTHER'],
   enum_otp_challenges_channel: ['PHONE', 'EMAIL'],
-  enum_otp_challenges_purpose: ['SIGNUP', 'LOGIN', 'VERIFY_PHONE', 'VERIFY_EMAIL', 'CHANGE_PHONE', 'CHANGE_EMAIL', 'ACCOUNT_RECOVERY', 'PASSWORD_RESET'],
+  enum_otp_challenges_purpose: [
+    'SIGNUP',
+    'LOGIN',
+    'VERIFY_PHONE',
+    'VERIFY_EMAIL',
+    'CHANGE_PHONE',
+    'CHANGE_EMAIL',
+    'ACCOUNT_RECOVERY',
+    'PASSWORD_RESET',
+  ],
   enum_partner_photos_category: ['COVER', 'GALLERY', 'MENU', 'VENUE', 'OTHER'],
   enum_partner_users_staff_role: ['OWNER', 'MANAGER', 'STAFF'],
   enum_partners_category: ['CAFE', 'HOTEL', 'ACTIVITY', 'OTHER'],
@@ -31,7 +57,12 @@ function makeSequelize() {
   if (config.use_env_variable) {
     return new Sequelize(process.env[config.use_env_variable], config);
   }
-  return new Sequelize(config.database, config.username, config.password, config);
+  return new Sequelize(
+    config.database,
+    config.username,
+    config.password,
+    config,
+  );
 }
 
 async function main() {
@@ -43,7 +74,10 @@ async function main() {
        ORDER BY table_name`,
       { replacements: { tables: expectedTables }, type: QueryTypes.SELECT },
     );
-    assert.deepEqual(tables.map(({ tableName }) => tableName), expectedTables);
+    assert.deepEqual(
+      tables.map(({ tableName }) => tableName),
+      expectedTables,
+    );
 
     const [{ count: foreignKeyCount }] = await sequelize.query(
       `SELECT count(*)::int AS count FROM information_schema.table_constraints
@@ -83,7 +117,12 @@ async function main() {
     );
     assert.equal(comments.length, expectedTables.length);
     assert.ok(comments.every(({ tableComment }) => Boolean(tableComment)));
-    assert.ok(comments.every(({ columnCount, commentedColumnCount }) => columnCount === commentedColumnCount));
+    assert.ok(
+      comments.every(
+        ({ columnCount, commentedColumnCount }) =>
+          columnCount === commentedColumnCount,
+      ),
+    );
 
     const enums = await sequelize.query(
       `SELECT t.typname AS "enumName", array_agg(e.enumlabel ORDER BY e.enumsortorder) AS values
@@ -91,73 +130,128 @@ async function main() {
        JOIN pg_namespace n ON n.oid = t.typnamespace
        WHERE n.nspname = 'public' AND t.typname IN (:enums)
        GROUP BY t.typname`,
-      { replacements: { enums: Object.keys(expectedEnums) }, type: QueryTypes.SELECT },
+      {
+        replacements: { enums: Object.keys(expectedEnums) },
+        type: QueryTypes.SELECT,
+      },
     );
     assert.equal(enums.length, Object.keys(expectedEnums).length);
     for (const { enumName, values } of enums) {
-      const normalizedValues = Array.isArray(values) ? values : values.slice(1, -1).split(',');
+      const normalizedValues = Array.isArray(values)
+        ? values
+        : values.slice(1, -1).split(',');
       assert.deepEqual(normalizedValues, expectedEnums[enumName]);
     }
 
     const requiredPartialIndexes = [
-      'auth_identities_one_primary_per_account', 'user_photos_one_primary_per_user',
-      'user_photos_live_display_order_key', 'partner_photos_one_primary_per_partner',
-      'partner_photos_live_display_order_key', 'user_sessions_active_by_account_idx',
+      'auth_identities_one_primary_per_account',
+      'user_photos_one_primary_per_user',
+      'user_photos_live_display_order_key',
+      'partner_photos_one_primary_per_partner',
+      'partner_photos_live_display_order_key',
+      'user_sessions_active_by_account_idx',
     ];
     const partialIndexes = await sequelize.query(
       `SELECT indexname, indexdef FROM pg_indexes
        WHERE schemaname = 'public' AND indexname IN (:indexes)`,
-      { replacements: { indexes: requiredPartialIndexes }, type: QueryTypes.SELECT },
+      {
+        replacements: { indexes: requiredPartialIndexes },
+        type: QueryTypes.SELECT,
+      },
     );
-    assert.deepEqual(partialIndexes.map(({ indexname }) => indexname).sort(), [...requiredPartialIndexes].sort());
-    assert.ok(partialIndexes.every(({ indexdef }) => indexdef.includes(' WHERE ')));
+    assert.deepEqual(
+      partialIndexes.map(({ indexname }) => indexname).sort(),
+      [...requiredPartialIndexes].sort(),
+    );
+    assert.ok(
+      partialIndexes.every(({ indexdef }) => indexdef.includes(' WHERE ')),
+    );
 
     const requiredUniqueConstraints = [
-      'account_roles_account_id_role_id_key', 'auth_identities_provider_identifier_key',
-      'media_storage_provider_storage_key_key', 'partner_photos_partner_id_media_id_key',
-      'partner_users_account_id_key', 'platform_users_account_id_key', 'roles_code_key',
-      'user_photos_user_id_media_id_key', 'user_sessions_refresh_token_hash_key', 'users_account_id_key',
+      'account_roles_account_id_role_id_key',
+      'auth_identities_provider_identifier_key',
+      'media_storage_provider_storage_key_key',
+      'partner_photos_partner_id_media_id_key',
+      'partner_users_account_id_key',
+      'platform_users_account_id_key',
+      'roles_code_key',
+      'user_photos_user_id_media_id_key',
+      'user_sessions_refresh_token_hash_key',
+      'users_account_id_key',
     ];
     const uniqueConstraints = await sequelize.query(
       `SELECT constraint_name AS "constraintName" FROM information_schema.table_constraints
        WHERE constraint_schema = 'public' AND constraint_type = 'UNIQUE'
          AND constraint_name IN (:constraints) ORDER BY constraint_name`,
-      { replacements: { constraints: requiredUniqueConstraints }, type: QueryTypes.SELECT },
+      {
+        replacements: { constraints: requiredUniqueConstraints },
+        type: QueryTypes.SELECT,
+      },
     );
-    assert.deepEqual(uniqueConstraints.map(({ constraintName }) => constraintName), [...requiredUniqueConstraints].sort());
+    assert.deepEqual(
+      uniqueConstraints.map(({ constraintName }) => constraintName),
+      [...requiredUniqueConstraints].sort(),
+    );
 
     const significantIndexes = [
-      'accounts_account_type_idx', 'accounts_status_idx', 'accounts_type_status_idx',
-      'partners_city_idx', 'partners_category_idx', 'partners_status_idx', 'partners_city_category_status_idx',
-      'partner_users_partner_id_idx', 'account_roles_role_id_idx', 'auth_identities_account_id_idx',
-      'otp_challenges_account_id_idx', 'otp_challenges_identifier_purpose_created_at_idx', 'otp_challenges_expires_at_idx',
-      'user_sessions_account_id_idx', 'user_sessions_expires_at_idx', 'user_sessions_revoked_at_idx',
-      'media_uploaded_by_account_id_idx', 'user_photos_media_id_idx', 'partner_photos_media_id_idx',
+      'accounts_account_type_idx',
+      'accounts_status_idx',
+      'accounts_type_status_idx',
+      'partners_city_idx',
+      'partners_category_idx',
+      'partners_status_idx',
+      'partners_city_category_status_idx',
+      'partner_users_partner_id_idx',
+      'account_roles_role_id_idx',
+      'auth_identities_account_id_idx',
+      'otp_challenges_account_id_idx',
+      'otp_challenges_identifier_purpose_created_at_idx',
+      'otp_challenges_expires_at_idx',
+      'user_sessions_account_id_idx',
+      'user_sessions_expires_at_idx',
+      'user_sessions_revoked_at_idx',
+      'media_uploaded_by_account_id_idx',
+      'user_photos_media_id_idx',
+      'partner_photos_media_id_idx',
       ...requiredPartialIndexes,
     ];
     const indexes = await sequelize.query(
       `SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND indexname IN (:indexes)`,
-      { replacements: { indexes: significantIndexes }, type: QueryTypes.SELECT },
+      {
+        replacements: { indexes: significantIndexes },
+        type: QueryTypes.SELECT,
+      },
     );
-    assert.deepEqual(indexes.map(({ indexname }) => indexname).sort(), [...significantIndexes].sort());
+    assert.deepEqual(
+      indexes.map(({ indexname }) => indexname).sort(),
+      [...significantIndexes].sort(),
+    );
 
     const roles = await sequelize.query(
       `SELECT code FROM roles WHERE is_system = TRUE AND code IN ('CUSTOMER', 'ADMIN', 'SUPERADMIN') ORDER BY code`,
       { type: QueryTypes.SELECT },
     );
-    assert.deepEqual(roles.map(({ code }) => code), ['ADMIN', 'CUSTOMER', 'SUPERADMIN']);
+    assert.deepEqual(
+      roles.map(({ code }) => code),
+      ['ADMIN', 'CUSTOMER', 'SUPERADMIN'],
+    );
 
-    console.log(JSON.stringify({
-      tables: tables.length,
-      foreignKeys: foreignKeyCount,
-      tableComments: comments.length,
-      columnComments: comments.reduce((sum, row) => sum + row.commentedColumnCount, 0),
-      enums: enums.length,
-      uniqueConstraints: uniqueConstraints.length,
-      significantIndexes: indexes.length,
-      requiredPartialIndexes: partialIndexes.length,
-      systemRoles: roles.length,
-    }));
+    console.log(
+      JSON.stringify({
+        tables: tables.length,
+        foreignKeys: foreignKeyCount,
+        tableComments: comments.length,
+        columnComments: comments.reduce(
+          (sum, row) => sum + row.commentedColumnCount,
+          0,
+        ),
+        enums: enums.length,
+        uniqueConstraints: uniqueConstraints.length,
+        significantIndexes: indexes.length,
+        requiredPartialIndexes: partialIndexes.length,
+        systemRoles: roles.length,
+      }),
+    );
   } finally {
     await sequelize.close();
   }
