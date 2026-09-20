@@ -1,20 +1,29 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
-import { api } from '../config/api';
+import { Platform } from "react-native";
+import { api } from "../config/api";
 import type {
   AccountProfile,
   AuthenticationResponse,
   AuthMode,
   OtpRequestResponse,
   StoredSession,
-} from '../types/auth';
-
-const SESSION_STORAGE_KEY = '@mello/auth-session';
+} from "../types/auth";
+import { clearSession, getSession, saveSession } from "./session.service";
 
 const device = {
-  deviceName: Platform.OS === 'android' ? 'Android phone' : 'Mobile device',
+  deviceName:
+    Platform.OS === "android"
+      ? "Android phone"
+      : Platform.OS === "ios"
+        ? "iPhone"
+        : "Web browser",
   platform:
-    Platform.OS === 'android' ? ('ANDROID' as const) : ('UNKNOWN' as const),
+    Platform.OS === "android"
+      ? ("ANDROID" as const)
+      : Platform.OS === "ios"
+        ? ("IOS" as const)
+        : Platform.OS === "web"
+          ? ("WEB" as const)
+          : ("UNKNOWN" as const),
 };
 
 export async function requestOtp(
@@ -22,15 +31,11 @@ export async function requestOtp(
   mode: AuthMode,
 ): Promise<OtpRequestResponse> {
   const endpoint =
-    mode === 'signup'
-      ? '/auth/signup/request-otp'
-      : '/auth/login/request-otp';
-  const body =
-    mode === 'signup'
-      ? { phone, accountType: 'DATING_USER' as const }
-      : { phone };
-
-  const response = await api.post<OtpRequestResponse>(endpoint, body);
+    mode === "signup" ? "/auth/signup/request-otp" : "/auth/login/request-otp";
+  const response = await api.post<OtpRequestResponse>(
+    endpoint,
+    mode === "signup" ? { phone, accountType: "DATING_USER" } : { phone },
+  );
   return response.data;
 }
 
@@ -40,55 +45,49 @@ export async function verifyOtp(
   mode: AuthMode,
 ): Promise<StoredSession> {
   const endpoint =
-    mode === 'signup' ? '/auth/signup/verify' : '/auth/login/verify';
+    mode === "signup" ? "/auth/signup/verify" : "/auth/login/verify";
   const body =
-    mode === 'signup'
-      ? {
-          phone,
-          otp,
-          accountType: 'DATING_USER' as const,
-          device,
-        }
+    mode === "signup"
+      ? { phone, otp, accountType: "DATING_USER", device }
       : { phone, otp, device };
-
-  const response = await api.post<AuthenticationResponse>(endpoint, body);
-  const session: StoredSession = {
-    tokens: response.data.tokens,
-    account: response.data.account,
-    profile: response.data.profile,
+  const { data } = await api.post<AuthenticationResponse>(endpoint, body);
+  const session = {
+    tokens: data.tokens,
+    account: data.account,
+    profile: data.profile,
   };
-  await AsyncStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  await saveSession(session);
   return session;
 }
 
 export async function restoreSession(): Promise<StoredSession | null> {
-  const stored = await AsyncStorage.getItem(SESSION_STORAGE_KEY);
-  if (!stored) return null;
-
+  const session = await getSession();
+  if (!session) return null;
   try {
-    const session = JSON.parse(stored) as StoredSession;
-    const response = await api.get<AccountProfile>('/auth/me', {
-      headers: {
-        Authorization: `Bearer ${session.tokens.accessToken}`,
-      },
-    });
-    return {
+    const { data } = await api.get<AccountProfile>("/auth/me");
+    const restored = {
       ...session,
-      account: response.data.account,
-      profile: response.data.profile,
+      account: data.account,
+      profile: data.profile,
     };
+    await saveSession(restored);
+    return restored;
   } catch {
-    await AsyncStorage.removeItem(SESSION_STORAGE_KEY);
+    await clearSession();
     return null;
   }
 }
 
-export async function logout(session: StoredSession): Promise<void> {
+export async function logout(): Promise<void> {
+  const session = await getSession();
   try {
-    await api.post('/auth/logout', {
-      refreshToken: session.tokens.refreshToken,
-    });
+    if (session)
+      await api.post("/auth/logout", {
+        refreshToken: session.tokens.refreshToken,
+      });
+  } catch {
+    // Local sign-out must still succeed when the API is offline.
   } finally {
-    await AsyncStorage.removeItem(SESSION_STORAGE_KEY);
+    await clearSession();
   }
 }

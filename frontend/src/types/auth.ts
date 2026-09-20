@@ -1,4 +1,4 @@
-export type AuthMode = 'signup' | 'login';
+export type AuthMode = "signup" | "login";
 
 export interface OtpRequestResponse {
   message: string;
@@ -10,7 +10,7 @@ export interface OtpRequestResponse {
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
-  tokenType: 'Bearer';
+  tokenType: "Bearer";
   accessTokenExpiresIn: number;
   refreshTokenExpiresIn: number;
 }
@@ -18,7 +18,7 @@ export interface AuthTokens {
 export interface AccountProfile {
   account: {
     id: string;
-    accountType: 'DATING_USER';
+    accountType: "DATING_USER";
     status: string;
   };
   profile: {
@@ -32,6 +32,6 @@ export interface AuthenticationResponse extends AccountProfile {
 
 export interface StoredSession {
   tokens: AuthTokens;
-  account: AccountProfile['account'];
-  profile: AccountProfile['profile'];
+  account: AccountProfile["account"];
+  profile: AccountProfile["profile"];
 }
