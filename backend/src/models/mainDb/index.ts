@@ -11,3 +11,4 @@ export * from './userSession';
 export * from './throughTables/accountRole';
 export * from './throughTables/partnerPhoto';
 export * from './throughTables/userPhoto';
+export * from './dating';

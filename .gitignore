@@ -12,6 +12,7 @@ dist/
 build/
 coverage/
 web-build/
+backend/uploads/
 
 # Expo and React Native generated files
 .expo/

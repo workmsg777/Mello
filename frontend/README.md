@@ -1,6 +1,6 @@
 # Mello mobile frontend
 
-Expo mobile client for dating-user phone authentication.
+Expo mobile client for dating-user authentication and restart-safe profile onboarding. It uses Expo Router, Redux Toolkit, Axios, SecureStore, and ImagePicker; the backend catalog and state endpoints are the source of truth.
 
 This root Expo project is exclusively the dating-user app. The separately
 installable partner application is located at [`apps/partner`](./apps/partner).
@@ -10,10 +10,10 @@ installable partner application is located at [`apps/partner`](./apps/partner).
 1. Start PostgreSQL and Redis, then start the backend on port `4000`.
 2. Connect the computer and Android phone to the same Wi-Fi network.
 3. Install **Expo Go** on the Android phone.
-4. Check `.env` and make sure `EXPO_PUBLIC_API_URL` uses the computer's Wi-Fi IPv4 address, not `localhost`:
+4. Copy `.env.example` to `.env` and replace `YOUR_COMPUTER_IP` with the computer's Wi-Fi IPv4 address, not `localhost`:
 
    ```env
-   EXPO_PUBLIC_API_URL=http://192.168.31.145:4000/api
+   EXPO_PUBLIC_API_URL=http://YOUR_COMPUTER_IP:4000/api
    ```
 
 5. From this `frontend` directory, run:
