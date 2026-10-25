@@ -12,3 +12,4 @@ export * from './role.repository';
 export * from './user.repository';
 export * from './user-photo.repository';
 export * from './user-session.repository';
+export * from './dating.repositories';

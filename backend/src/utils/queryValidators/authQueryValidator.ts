@@ -19,7 +19,7 @@ const deviceSchema = z
 const partnerSignupSchema = z.object({
   ownerName: z.string().trim().min(1).max(200),
   businessName: z.string().trim().min(1).max(200),
-  category: z.enum(['CAFE', 'HOTEL', 'ACTIVITY', 'OTHER']),
+  category: z.enum(['CAFE', 'HOTEL', 'ACTIVITY', 'OTHER', 'RESTAURANT']),
   description: z.string().trim().max(5_000).optional(),
   addressLine1: z.string().trim().min(1).max(255),
   addressLine2: z.string().trim().max(255).optional(),

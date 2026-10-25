@@ -9,7 +9,7 @@ import {
 export class Partner extends Model {
   declare id: string;
   declare name: string;
-  declare category: 'CAFE' | 'HOTEL' | 'ACTIVITY' | 'OTHER';
+  declare category: 'CAFE' | 'RESTAURANT' | 'HOTEL' | 'ACTIVITY' | 'OTHER';
   declare description: string | null;
   declare addressLine1: string;
   declare addressLine2: string | null;
@@ -35,7 +35,13 @@ export class Partner extends Model {
           allowNull: false,
         },
         category: {
-          type: DataTypes.ENUM('CAFE', 'HOTEL', 'ACTIVITY', 'OTHER'),
+          type: DataTypes.ENUM(
+            'CAFE',
+            'HOTEL',
+            'ACTIVITY',
+            'OTHER',
+            'RESTAURANT',
+          ),
           allowNull: false,
         },
         description: {

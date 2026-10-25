@@ -17,7 +17,7 @@ export interface DeviceInfo {
 export interface PartnerSignupData {
   ownerName: string;
   businessName: string;
-  category: 'CAFE' | 'HOTEL' | 'ACTIVITY' | 'OTHER';
+  category: 'CAFE' | 'RESTAURANT' | 'HOTEL' | 'ACTIVITY' | 'OTHER';
   description?: string | undefined;
   addressLine1: string;
   addressLine2?: string | undefined;

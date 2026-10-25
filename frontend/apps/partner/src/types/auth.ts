@@ -1,6 +1,7 @@
-export type AuthMode = 'signup' | 'login';
+export type AuthMode = "signup" | "login";
 
-export type PartnerCategory = 'CAFE' | 'HOTEL' | 'ACTIVITY' | 'OTHER';
+export type PartnerCategory =
+  "CAFE" | "RESTAURANT" | "HOTEL" | "ACTIVITY" | "OTHER";
 
 export interface PartnerSignupData {
   ownerName: string;
@@ -26,7 +27,7 @@ export interface OtpRequestResponse {
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
-  tokenType: 'Bearer';
+  tokenType: "Bearer";
   accessTokenExpiresIn: number;
   refreshTokenExpiresIn: number;
 }
@@ -48,7 +49,7 @@ export interface PartnerProfile {
 export interface AccountProfile {
   account: {
     id: string;
-    accountType: 'DATING_USER' | 'PARTNER_USER' | 'PLATFORM_USER';
+    accountType: "DATING_USER" | "PARTNER_USER" | "PLATFORM_USER";
     status: string;
   };
   profile: PartnerProfile;
@@ -60,6 +61,6 @@ export interface AuthenticationResponse extends AccountProfile {
 
 export interface StoredSession {
   tokens: AuthTokens;
-  account: AccountProfile['account'] & { accountType: 'PARTNER_USER' };
+  account: AccountProfile["account"] & { accountType: "PARTNER_USER" };
   profile: PartnerProfile;
 }
