@@ -1,4 +1,6 @@
 import { api } from "../config/api";
+import { Platform } from "react-native";
+import { createPhotoFormData, type PhotoUploadAsset } from "./photo-upload";
 import type {
   City,
   DatingCatalog,
@@ -155,20 +157,17 @@ export const datingApi = {
     ).data;
   },
   async uploadPhoto(
-    asset: { uri: string; fileName?: string | null; mimeType?: string | null },
+    asset: PhotoUploadAsset,
     onProgress?: (value: number) => void,
   ) {
-    const data = new FormData();
-    data.append("photo", {
-      uri: asset.uri,
-      name: asset.fileName || `mello-${Date.now()}.jpg`,
-      type: asset.mimeType || "image/jpeg",
-    } as unknown as Blob);
+    const data = await createPhotoFormData(
+      asset,
+      Platform.OS === "web" ? "web" : "native",
+    );
     const response = await api.post<{ photos: UserPhoto[] }>(
       "/dating/photos",
       data,
       {
-        headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: ({ loaded, total }) =>
           onProgress?.(total ? loaded / total : 0),
       },

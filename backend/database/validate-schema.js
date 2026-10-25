@@ -46,7 +46,7 @@ const expectedEnums = {
   ],
   enum_partner_photos_category: ['COVER', 'GALLERY', 'MENU', 'VENUE', 'OTHER'],
   enum_partner_users_staff_role: ['OWNER', 'MANAGER', 'STAFF'],
-  enum_partners_category: ['CAFE', 'HOTEL', 'ACTIVITY', 'OTHER'],
+  enum_partners_category: ['CAFE', 'HOTEL', 'ACTIVITY', 'OTHER', 'RESTAURANT'],
   enum_partners_status: ['ACTIVE', 'INACTIVE'],
   enum_user_photos_moderation_status: ['PENDING', 'APPROVED', 'REJECTED'],
   enum_user_sessions_platform: ['ANDROID', 'IOS', 'WEB', 'UNKNOWN'],

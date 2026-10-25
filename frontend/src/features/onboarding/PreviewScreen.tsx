@@ -1,7 +1,8 @@
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
-import { absoluteMediaUrl, getApiErrorMessage } from "../../config/api";
+import { StyleSheet, Text, View } from "react-native";
+import { ProfilePhoto } from "../../components/ProfilePhoto";
+import { getApiErrorMessage } from "../../config/api";
 import {
   ErrorNotice,
   LoadingScreen,
@@ -22,6 +23,22 @@ export function PreviewScreen() {
       .then(setPreview)
       .catch((e) => setError(getApiErrorMessage(e)));
   }, [setError]);
+  if (!preview && error)
+    return (
+      <OnboardingShell title="A little connection hiccup.">
+        <ErrorNotice message={error} />
+        <PrimaryButton
+          label="Try again"
+          onPress={() => {
+            setError(null);
+            void datingApi
+              .preview()
+              .then(setPreview)
+              .catch((e) => setError(getApiErrorMessage(e)));
+          }}
+        />
+      </OnboardingShell>
+    );
   if (!preview) return <LoadingScreen label="Building your preview…" />;
   const completed = state.onboarding.progress?.status === "COMPLETED";
   const complete = () =>
@@ -46,10 +63,7 @@ export function PreviewScreen() {
     >
       <View style={styles.card}>
         {preview.photos[0]?.url ? (
-          <Image
-            source={{ uri: absoluteMediaUrl(preview.photos[0].url) }}
-            style={styles.hero}
-          />
+          <ProfilePhoto url={preview.photos[0].url} style={styles.hero} />
         ) : null}
         <View style={styles.copy}>
           <Text style={styles.name}>

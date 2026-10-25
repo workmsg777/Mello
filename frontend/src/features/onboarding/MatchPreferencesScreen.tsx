@@ -64,10 +64,10 @@ export function MatchPreferencesScreen() {
       minAge,
       maxAge,
       maxDistanceKm: distance,
-      ageIsDealbreaker: false,
-      distanceIsDealbreaker: false,
+      ageIsDealbreaker: true,
+      distanceIsDealbreaker: true,
       verifiedProfilesOnly: false,
-      preferSameCity: false,
+      preferSameCity: true,
     });
   };
   return (
@@ -130,6 +130,10 @@ export function MatchPreferencesScreen() {
         max={500}
         onChange={setDistance}
       />
+      <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 19 }}>
+        Distance uses approximate city centres. Where coordinates are
+        unavailable, discovery stays within your selected city.
+      </Text>
       <ErrorNotice message={error} />
     </OnboardingShell>
   );

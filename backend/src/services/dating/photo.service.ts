@@ -6,6 +6,8 @@ import { datingProfileConfig } from '../../config/datingProfile';
 import Errors from '../../errors';
 import { UserPhotoRepository } from '../../repositories';
 import { MediaService } from './media.service';
+import { nextPhotoOrder } from '../discovery.rules';
+import { User } from '../../models';
 
 export interface UploadedProfilePhoto {
   path: string;
@@ -43,10 +45,15 @@ export class UserPhotoService {
   async upload(userId: string, accountId: string, file: UploadedProfilePhoto) {
     try {
       await sequelize.transaction(async (transaction) => {
-        const count = await this.repository.count({
+        await User.findByPk(userId, {
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+        const existing = await this.repository.findAll({
           where: { userId },
           transaction,
         });
+        const count = existing.length;
         if (count >= datingProfileConfig.maximumPhotos)
           throw new Errors.BadRequestError(
             `A profile may have at most ${datingProfileConfig.maximumPhotos} photos`,
@@ -65,7 +72,9 @@ export class UserPhotoService {
             id: randomUUID(),
             userId,
             mediaId: media.id,
-            displayOrder: count,
+            displayOrder: nextPhotoOrder(
+              existing.map((photo) => photo.displayOrder),
+            ),
             isPrimary: count === 0,
             moderationStatus: 'PENDING',
           },
@@ -81,6 +90,10 @@ export class UserPhotoService {
 
   async remove(userId: string, photoId: string): Promise<void> {
     await sequelize.transaction(async (transaction) => {
+      await User.findByPk(userId, {
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
       const photo = await this.repository.findOne({
         where: { id: photoId, userId },
         transaction,
@@ -115,6 +128,10 @@ export class UserPhotoService {
     if (!photoIds.includes(primaryPhotoId))
       throw new Errors.BadRequestError('Primary photo must be in photo order');
     await sequelize.transaction(async (transaction) => {
+      await User.findByPk(userId, {
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
       const current = await this.repository.findAll({
         where: { userId },
         transaction,

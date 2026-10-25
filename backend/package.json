@@ -14,16 +14,20 @@
     "db:migrate:undo": "sequelize-cli db:migrate:undo",
     "db:migrate:undo:all": "sequelize-cli db:migrate:undo:all",
     "db:seed": "sequelize-cli db:seed:all",
+    "db:seed:demo": "node scripts/seed-demo.cjs",
     "db:seed:undo": "sequelize-cli db:seed:undo:all",
     "db:validate": "node database/validate-schema.js",
     "db:validate:dating": "node database/validate-dating-profile-schema.js",
-    "test": "npm run typecheck"
+    "test": "npm run typecheck && node --import tsx --test tests/*.test.cjs",
+    "test:integration": "node --import tsx --test tests/*.test.cjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.11",
+    "@electric-sql/pglite-socket": "^0.2.14",
     "@types/bcrypt": "^6.0.0",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
@@ -33,10 +37,12 @@
     "@types/node": "^26.4.1",
     "prettier": "^3.9.6",
     "sequelize-cli": "^6.6.5",
+    "socket.io-client": "^4.8.4",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "@socket.io/redis-adapter": "^8.3.0",
     "bcrypt": "^6.0.0",
     "compression": "^1.8.1",
     "cors": "^2.8.6",

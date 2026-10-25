@@ -1,8 +1,22 @@
-# Mello Partner mobile app
+# Mello Partner app
+
+Uses Expo SDK 58, matching the dating app. Use Expo Go for SDK 58. After upgrading, stop the old Metro server and restart with `npx expo start --clear`.
 
 This is a separate Expo application from the dating-user app at `frontend/`.
 It has its own Android/iOS identifiers, environment configuration, dependencies,
-and authentication-session storage.
+and authentication-session storage. It supports Android, iOS and the browser.
+
+## Start in the browser
+
+```powershell
+cd C:\Users\sahil\Desktop\Mello\frontend\apps\partner
+npm ci --legacy-peer-deps
+npm run web
+```
+
+Open http://localhost:8082. Partner uses port 8082 so it can run alongside the dating app on port 8081. If its Metro server is already running, open that URL or press `w` in its terminal instead of starting a second server. The API must be running on port 4000 for OTP, listings and date requests.
+
+To validate a production web bundle, run `npm run typecheck` and `npm run build:web`. Serve the generated `web-build/` folder over HTTP rather than opening its HTML directly. Set `EXPO_PUBLIC_API_URL` before building when deploying against a remote API.
 
 ## Start on Android
 
@@ -15,14 +29,13 @@ npm start
 Install Expo Go on the Android phone and scan the QR code. The computer and
 phone should be on the same Wi-Fi network.
 
-The local API address is configured in `.env`:
+The local API uses the Expo computer's LAN address automatically during development. Copy `.env.example` to `.env` and leave this value empty when the backend runs on that computer at port `4000`:
 
 ```env
-EXPO_PUBLIC_API_URL=http://192.168.31.145:4000/api
+EXPO_PUBLIC_API_URL=
 ```
 
-Update the address when the computer's Wi-Fi IPv4 changes. Start the backend,
-PostgreSQL, and Redis before testing.
+For a separate API host, an Expo tunnel, or production, set an explicit reachable API URL. Restart Expo after changing Wi-Fi networks. Start the backend, PostgreSQL, and Redis before testing.
 
 For local OTP testing, use these backend settings and restart the backend:
 
