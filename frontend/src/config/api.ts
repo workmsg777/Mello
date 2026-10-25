@@ -1,4 +1,8 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
+import Constants from "expo-constants";
+import { Platform } from "react-native";
+import { resolveApiBaseUrl } from "./api-url";
+import { resolveMediaUrl } from "./media-url";
 import {
   clearSession,
   getSession,
@@ -6,10 +10,14 @@ import {
 } from "../services/session.service";
 import type { AuthTokens } from "../types/auth";
 
-const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
-export const API_BASE_URL = (
-  configuredApiUrl || "http://localhost:4000/api"
-).replace(/\/$/, "");
+export const API_BASE_URL = resolveApiBaseUrl({
+  configuredUrl: process.env.EXPO_PUBLIC_API_URL,
+  platform: Platform.OS,
+  isDevelopment: __DEV__,
+  expoHostUri: Constants.expoConfig?.hostUri,
+  browserHostname:
+    typeof window !== "undefined" ? window.location?.hostname : undefined,
+});
 export const API_ORIGIN = API_BASE_URL.replace(/\/api$/, "");
 
 export const api = axios.create({ baseURL: API_BASE_URL, timeout: 20_000 });
@@ -61,6 +69,7 @@ api.interceptors.response.use(
           {
             refreshToken: session.tokens.refreshToken,
           },
+          { timeout: 20000 },
         );
         await saveSession({ ...session, tokens: response.data });
         return response.data;
@@ -79,10 +88,7 @@ api.interceptors.response.use(
 );
 
 export function absoluteMediaUrl(url: string | null): string | undefined {
-  if (!url) return undefined;
-  return /^https?:\/\//.test(url)
-    ? url
-    : `${API_ORIGIN}${url.startsWith("/") ? "" : "/"}${url}`;
+  return resolveMediaUrl(url, API_BASE_URL, __DEV__);
 }
 
 export function getApiErrorMessage(error: unknown): string {

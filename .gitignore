@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.npm-cache/
 
 # Environment files and secrets
 .env
@@ -12,6 +13,7 @@ dist/
 build/
 coverage/
 web-build/
+android-preview-build/
 backend/uploads/
 
 # Expo and React Native generated files

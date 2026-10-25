@@ -51,6 +51,12 @@ export async function verifyOtp(
       ? { phone, otp, accountType: "DATING_USER", device }
       : { phone, otp, device };
   const { data } = await api.post<AuthenticationResponse>(endpoint, body);
+  if (data.account.accountType !== "DATING_USER") {
+    await api
+      .post("/auth/logout", { refreshToken: data.tokens.refreshToken })
+      .catch(() => undefined);
+    throw new Error("Use the Mello Partner app for this account.");
+  }
   const session = {
     tokens: data.tokens,
     account: data.account,
@@ -65,8 +71,11 @@ export async function restoreSession(): Promise<StoredSession | null> {
   if (!session) return null;
   try {
     const { data } = await api.get<AccountProfile>("/auth/me");
+    const current = await getSession();
+    if (!current || data.account.accountType !== "DATING_USER")
+      throw new Error("Dating account required");
     const restored = {
-      ...session,
+      ...current,
       account: data.account,
       profile: data.profile,
     };

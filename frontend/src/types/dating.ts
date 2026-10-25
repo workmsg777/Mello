@@ -215,6 +215,7 @@ export interface ProfilePreview {
     promptId: string;
     promptText: string;
     answerText: string | null;
+    mediaId?: string | null;
     displayOrder: number;
   }>;
 }

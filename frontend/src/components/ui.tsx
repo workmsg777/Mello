@@ -2,6 +2,7 @@ import type { PropsWithChildren, ReactNode } from "react";
 import {
   ActivityIndicator,
   Pressable,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -55,7 +56,12 @@ export function OnboardingShell({
         contentContainerStyle={styles.shellContent}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.kicker}>MELLO PROFILE</Text>
+        <View style={styles.shellBrand}>
+          <Text style={styles.brandWord}>
+            mello<Text style={{ color: colors.coral }}>.</Text>
+          </Text>
+          <Text style={styles.kicker}>A LITTLE MORE YOU</Text>
+        </View>
         <Text style={styles.title}>{title}</Text>
         {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
         <View style={styles.body}>{children}</View>
@@ -182,6 +188,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingTop: 30,
     paddingBottom: 30,
+    width: "100%",
+    maxWidth: 640,
+    alignSelf: "center",
+  },
+  shellBrand: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 28,
+  },
+  brandWord: {
+    fontSize: 29,
+    letterSpacing: -1.5,
+    fontWeight: "800",
+    color: colors.ink,
   },
   kicker: {
     color: colors.coral,
@@ -194,7 +215,12 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 34,
     lineHeight: 39,
-    fontWeight: "900",
+    fontFamily: Platform.select({
+      ios: "Georgia",
+      android: "serif",
+      default: "Georgia, serif",
+    }),
+    fontWeight: "400",
     letterSpacing: -1.1,
   },
   subtitle: {
@@ -210,10 +236,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cream,
     borderTopColor: colors.line,
     borderTopWidth: StyleSheet.hairlineWidth,
+    width: "100%",
+    maxWidth: 640,
+    alignSelf: "center",
   },
   button: {
     minHeight: 54,
-    borderRadius: radii.medium,
+    borderRadius: 30,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 20,
@@ -225,7 +254,7 @@ const styles = StyleSheet.create({
     borderColor: colors.coral,
   },
   buttonGhost: { backgroundColor: "transparent" },
-  buttonText: { color: colors.ink, fontSize: 15, fontWeight: "900" },
+  buttonText: { color: colors.white, fontSize: 14, fontWeight: "700" },
   buttonTextSecondary: { color: colors.coral },
   disabled: { opacity: 0.45 },
   pressed: { transform: [{ scale: 0.985 }] },

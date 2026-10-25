@@ -17,6 +17,10 @@ app.use(
   express.static(profilePhotoUploadDirectory, {
     maxAge: '1h',
     immutable: false,
+    // The web client and API can run on different origins (for example, ports 8081 and 4000).
+    setHeaders: (res) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    },
   }),
 );
 app.use('/api', apiRouter);

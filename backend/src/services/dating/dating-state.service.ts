@@ -149,12 +149,18 @@ export class DatingStateService {
 
     return {
       profile,
-      photos: photos.map(({ id, url, displayOrder, isPrimary }) => ({
-        id,
-        url,
-        displayOrder,
-        isPrimary,
-      })),
+      photos: [...photos]
+        .sort(
+          (a, b) =>
+            Number(b.isPrimary) - Number(a.isPrimary) ||
+            a.displayOrder - b.displayOrder,
+        )
+        .map(({ id, url, displayOrder, isPrimary }) => ({
+          id,
+          url,
+          displayOrder,
+          isPrimary,
+        })),
       profileOptions: profileOptions
         .map((selection) => {
           const category = categoryById.get(selection.categoryId);

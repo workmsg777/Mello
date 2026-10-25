@@ -141,3 +141,14 @@ the `user_sessions` table, and every refresh rotates the token.
 Use `OTP_DELIVERY_MODE=console` locally. The OTP appears in backend logs. Setting
 `OTP_EXPOSE_IN_RESPONSE=true` also includes `developmentOtp` in request-OTP
 responses outside production. Never enable response exposure in production.
+
+## SMS delivery
+
+Set `OTP_DELIVERY_MODE=twilio` to use the implemented Twilio SMS adapter.
+Configure `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and either
+`TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_FROM_NUMBER` on the backend.
+Use `OTP_EXPOSE_IN_RESPONSE=false` in production. The adapter uses a ten-second
+request timeout and returns a safe retry error on delivery failures. No credentials
+or provider response bodies are returned to the app. A provider account and sender
+that can deliver to your users are required; carrier delivery has not been tested
+without those credentials. The test suite mocks HTTP delivery and sends no SMS.

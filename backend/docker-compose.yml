@@ -60,6 +60,9 @@ services:
         condition: service_healthy
     ports:
       - '${PORT:-4000}:${PORT:-4000}'
+    volumes:
+      - mello_uploads:/app/uploads
 
 volumes:
   dating_postgres_data:
+  mello_uploads:

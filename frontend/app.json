@@ -8,7 +8,8 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mello.app"
     },
     "android": {
       "package": "com.mello.app",
@@ -21,6 +22,7 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
+      "output": "single",
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
@@ -31,7 +33,9 @@
         {
           "photosPermission": "Mello uses your photos to build your dating profile."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true

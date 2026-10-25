@@ -1,7 +1,7 @@
 import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { absoluteMediaUrl } from "../../config/api";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { ProfilePhoto } from "../../components/ProfilePhoto";
 import {
   ErrorNotice,
   OnboardingShell,
@@ -12,22 +12,40 @@ import { colors, radii } from "../../theme";
 import { useOnboarding } from "./useOnboarding";
 
 export function PhotosScreen() {
-  const { catalog, state, busy, error, run, finish, progress } =
+  const { catalog, state, busy, error, setError, run, finish, progress } =
     useOnboarding();
   const [upload, setUpload] = useState(0);
+  const [picking, setPicking] = useState(false);
   const photos = state.photos;
   const pick = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      aspect: [4, 5],
-      quality: 0.85,
-    });
-    if (!result.canceled)
-      await run(() => datingApi.uploadPhoto(result.assets[0]!, setUpload));
-    setUpload(0);
+    if (busy || picking) return;
+    setPicking(true);
+    setError(null);
+    try {
+      // Open the browser picker directly from the tap; web needs no library permission.
+      if (Platform.OS !== "web") {
+        const permission =
+          await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          setError("Allow photo library access to add a profile photo.");
+          return;
+        }
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [4, 5],
+        quality: 0.85,
+      });
+      const asset = result.assets?.[0];
+      if (!result.canceled && asset)
+        await run(() => datingApi.uploadPhoto(asset, setUpload));
+    } catch {
+      setError("Unable to open the selected photo. Please try again.");
+    } finally {
+      setUpload(0);
+      setPicking(false);
+    }
   };
   const move = (index: number, offset: number) => {
     const reordered = [...photos];
@@ -62,10 +80,7 @@ export function PhotosScreen() {
         {photos.map((photo, index) => (
           <View key={photo.id} style={styles.photoCard}>
             {photo.url ? (
-              <Image
-                source={{ uri: absoluteMediaUrl(photo.url) }}
-                style={styles.image}
-              />
+              <ProfilePhoto url={photo.url} style={styles.image} />
             ) : (
               <View style={styles.image} />
             )}
@@ -106,7 +121,7 @@ export function PhotosScreen() {
           label={
             upload ? `Uploading ${Math.round(upload * 100)}%` : "+ Add a photo"
           }
-          loading={upload > 0}
+          loading={busy || picking}
           onPress={() => void pick()}
         />
       ) : null}
