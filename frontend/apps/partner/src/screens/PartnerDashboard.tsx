@@ -15,6 +15,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { api, getApiErrorMessage } from "../config/api";
 import type { StoredSession } from "../types/auth";
+import { PartnerTeam } from "./PartnerTeam";
+import { PartnerContent } from "./PartnerContent";
+import { CitySelect } from "../components/CitySelect";
+import type { Permissions } from "../services/partner.service";
+import { NotificationCenter } from "../features/notifications/NotificationCenter";
 
 type Kind = "CAFE" | "RESTAURANT" | "ACTIVITY";
 interface Venue {
@@ -56,12 +61,14 @@ function Field({
   onChangeText,
   multiline = false,
   keyboardType = "default",
+  editable = true,
 }: {
   label: string;
   value: string;
   onChangeText: (text: string) => void;
   multiline?: boolean;
   keyboardType?: "default" | "numeric" | "url";
+  editable?: boolean;
 }) {
   return (
     <View style={s.field}>
@@ -76,6 +83,7 @@ function Field({
         onChangeText={onChangeText}
         multiline={multiline}
         keyboardType={keyboardType}
+        editable={editable}
         placeholderTextColor={palette.muted}
       />
     </View>
@@ -90,8 +98,15 @@ export function PartnerDashboard({
 }) {
   const [venue, setVenue] = useState<Venue | null>(null);
   const [requests, setRequests] = useState<DateRequest[]>([]);
-  const [role, setRole] = useState("OWNER");
-  const [tab, setTab] = useState<"listing" | "requests">("listing");
+  const [permissions, setPermissions] = useState<Permissions>({
+    manageTeam: false,
+    manageListing: false,
+    manageRequests: false,
+    manageContent: false,
+  });
+  const [tab, setTab] = useState<"listing" | "requests" | "team" | "content">(
+    "listing",
+  );
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,14 +120,20 @@ export function PartnerDashboard({
     setLoading(true);
     setError(null);
     try {
-      const [workspace, inbox] = await Promise.all([
-        api.get<{ venue: Venue; staffRole: string }>("/partner/workspace"),
-        api.get<DateRequest[]>("/partner/requests"),
-      ]);
+      const workspace = await api.get<{
+        venue: Venue;
+        permissions: Permissions;
+      }>("/partner/workspace");
       const value = workspace.data.venue;
+      const access = workspace.data.permissions;
       setVenue(value);
-      setRole(workspace.data.staffRole);
-      setRequests(inbox.data);
+      setPermissions(access);
+      if (!access.manageListing) setTab("content");
+      setRequests(
+        access.manageRequests
+          ? (await api.get<DateRequest[]>("/partner/requests")).data
+          : [],
+      );
       setPrice(value.priceForTwoInr?.toString() ?? "");
       setDuration(String(value.durationMinutes ?? 90));
       setTags(value.tags?.join(", ") ?? "");
@@ -192,6 +213,26 @@ export function PartnerDashboard({
           mello<Text style={{ color: "#C67C86" }}>.</Text>
           <Text style={s.partnerLabel}> PARTNER</Text>
         </Text>
+        <NotificationCenter
+          accountId={session.account.id}
+          app="PARTNER"
+          onChange={() => {
+            if (permissions.manageRequests)
+              void api
+                .get<DateRequest[]>("/partner/requests")
+                .then((result) => setRequests(result.data))
+                .catch(() => undefined);
+          }}
+          onOpen={() => {
+            if (permissions.manageRequests) {
+              setTab("requests");
+              void api
+                .get<DateRequest[]>("/partner/requests")
+                .then((result) => setRequests(result.data))
+                .catch((caught) => setError(getApiErrorMessage(caught)));
+            }
+          }}
+        />
         <Pressable
           accessibilityRole="button"
           disabled={busy}
@@ -249,7 +290,14 @@ export function PartnerDashboard({
           </View>
         </View>
         <View style={s.tabs}>
-          {(["listing", "requests"] as const).map((value) => (
+          {(
+            [
+              "content",
+              ...(permissions.manageListing ? ["listing" as const] : []),
+              ...(permissions.manageRequests ? ["requests" as const] : []),
+              ...(permissions.manageTeam ? ["team" as const] : []),
+            ] as const
+          ).map((value) => (
             <Pressable
               accessibilityRole="button"
               key={value}
@@ -260,9 +308,13 @@ export function PartnerDashboard({
               }}
             >
               <Text style={[s.tabText, tab === value && { color: "white" }]}>
-                {value === "listing"
-                  ? "Your lovely place"
-                  : `Date requests${pending ? ` · ${pending}` : ""}`}
+                {value === "content"
+                  ? "Menus & experiences"
+                  : value === "team"
+                    ? "Your team"
+                    : value === "listing"
+                      ? "Your lovely place"
+                      : `Date requests${pending ? ` · ${pending}` : ""}`}
               </Text>
             </Pressable>
           ))}
@@ -289,11 +341,17 @@ export function PartnerDashboard({
             <Text style={s.buttonText}>Try again</Text>
           </Pressable>
         ) : null}
-        {!loading && venue && tab === "listing" ? (
+        {!loading && venue && tab === "team" && permissions.manageTeam ? (
+          <PartnerTeam />
+        ) : null}
+        {!loading && venue && tab === "content" && permissions.manageContent ? (
+          <PartnerContent />
+        ) : null}
+        {!loading && venue && tab === "listing" && permissions.manageListing ? (
           <>
-            {role === "STAFF" ? (
+            {!permissions.manageListing ? (
               <Text style={s.copy}>
-                Your owner or manager can edit and publish this listing.
+                Your partner admin can edit and publish this listing.
               </Text>
             ) : null}
             <View style={s.card}>
@@ -384,15 +442,22 @@ export function PartnerDashboard({
                 value={venue.address}
                 onChangeText={(v) => update("address", v)}
               />
-              <Field
-                label="City · match the city name used by your guests"
+              <CitySelect
                 value={venue.city}
-                onChangeText={(v) => update("city", v)}
+                disabled={!permissions.manageListing}
+                onSelect={(city) =>
+                  setVenue((current) =>
+                    current
+                      ? { ...current, city: city.value, state: city.state }
+                      : current,
+                  )
+                }
               />
               <Field
-                label="State"
+                label="State · filled automatically"
                 value={venue.state}
-                onChangeText={(v) => update("state", v)}
+                editable={false}
+                onChangeText={() => undefined}
               />
               <Field
                 label="Postal code"
@@ -425,7 +490,7 @@ export function PartnerDashboard({
               </View>
               <Switch
                 accessibilityLabel="Publish venue listing"
-                disabled={role === "STAFF"}
+                disabled={!permissions.manageListing}
                 value={venue.isPublished}
                 onValueChange={(v) => update("isPublished", v)}
                 trackColor={{ true: palette.green }}
@@ -433,9 +498,12 @@ export function PartnerDashboard({
             </View>
             <Pressable
               accessibilityRole="button"
-              disabled={busy || role === "STAFF"}
+              disabled={busy || !permissions.manageListing}
               onPress={() => void save()}
-              style={[s.button, (busy || role === "STAFF") && { opacity: 0.5 }]}
+              style={[
+                s.button,
+                (busy || !permissions.manageListing) && { opacity: 0.5 },
+              ]}
             >
               {busy ? (
                 <ActivityIndicator color="white" />
@@ -577,12 +645,19 @@ const s = StyleSheet.create({
   },
   tabs: {
     flexDirection: "row",
+    flexWrap: "wrap",
     padding: 5,
     backgroundColor: palette.soft,
     borderRadius: 30,
     gap: 6,
   },
-  tab: { flex: 1, borderRadius: 25, paddingVertical: 14, alignItems: "center" },
+  tab: {
+    flex: 1,
+    minWidth: 130,
+    borderRadius: 25,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
   tabActive: { backgroundColor: palette.green },
   tabText: { fontSize: 12, fontWeight: "700", color: palette.green },
   card: {

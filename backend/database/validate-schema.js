@@ -45,7 +45,7 @@ const expectedEnums = {
     'PASSWORD_RESET',
   ],
   enum_partner_photos_category: ['COVER', 'GALLERY', 'MENU', 'VENUE', 'OTHER'],
-  enum_partner_users_staff_role: ['OWNER', 'MANAGER', 'STAFF'],
+  enum_partner_users_staff_role: ['PARTNER_ADMIN', 'PARTNER_SUPPORT'],
   enum_partners_category: ['CAFE', 'HOTEL', 'ACTIVITY', 'OTHER', 'RESTAURANT'],
   enum_partners_status: ['ACTIVE', 'INACTIVE'],
   enum_user_photos_moderation_status: ['PENDING', 'APPROVED', 'REJECTED'],
@@ -85,7 +85,7 @@ async function main() {
          AND table_name IN (:tables)`,
       { replacements: { tables: expectedTables }, type: QueryTypes.SELECT },
     );
-    assert.equal(foreignKeyCount, 14);
+    assert.equal(foreignKeyCount, 15);
     const foreignKeyRules = await sequelize.query(
       `SELECT rc.update_rule AS "updateRule", rc.delete_rule AS "deleteRule", count(*)::int AS count
        FROM information_schema.referential_constraints rc
@@ -99,7 +99,7 @@ async function main() {
     assert.deepEqual(foreignKeyRules, [
       { updateRule: 'CASCADE', deleteRule: 'CASCADE', count: 12 },
       { updateRule: 'CASCADE', deleteRule: 'RESTRICT', count: 1 },
-      { updateRule: 'CASCADE', deleteRule: 'SET NULL', count: 1 },
+      { updateRule: 'CASCADE', deleteRule: 'SET NULL', count: 2 },
     ]);
 
     const comments = await sequelize.query(

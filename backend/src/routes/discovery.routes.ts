@@ -6,6 +6,9 @@ import { requireDatingUser } from '../middleware/requireDatingUser';
 import { DiscoveryService } from '../services/discovery.service';
 import { PartnerService } from '../services/partner.service';
 import { publishChat } from '../realtime/chat-events';
+import { partnerCatalog } from '../constants/partner';
+import { partnerContentRouter } from './partner-content.routes';
+import { PartnerContentService } from '../services/partner-content.service';
 
 function parse<T>(schema: ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
@@ -131,6 +134,7 @@ discoveryRouter.patch('/matches/:matchId/plans/:planId', async (req, res) => {
 });
 
 export const partnerRouter = Router();
+partnerRouter.get('/catalog', (_req, res) => res.json(partnerCatalog()));
 partnerRouter.use(authenticate, (req, _res, next) => {
   if (req.auth?.accountType !== 'PARTNER_USER')
     throw new Errors.ForbiddenError('Partner access is required');
@@ -138,6 +142,14 @@ partnerRouter.use(authenticate, (req, _res, next) => {
 });
 partnerRouter.get('/workspace', async (req, res) => {
   res.json(await partner.get(req.auth!.accountId));
+});
+partnerRouter.use(partnerContentRouter);
+discoveryRouter.get('/venues/:partnerId/content', async (req, res) => {
+  res.json(
+    await new PartnerContentService().published(
+      parse(id, req.params.partnerId),
+    ),
+  );
 });
 partnerRouter.put('/listing', async (req, res) => {
   const input = parse(

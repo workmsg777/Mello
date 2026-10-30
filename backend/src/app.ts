@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { profilePhotoUploadDirectory } from './config/uploads';
 import { errorHandle, notFound } from './middleware';
 import { apiRouter } from './routes';
+import path from 'node:path';
 
 export const app = express();
 
@@ -24,6 +25,14 @@ app.use(
   }),
 );
 app.use('/api', apiRouter);
+app.use(
+  '/uploads/partner-photos',
+  express.static(path.resolve('uploads/partner-photos'), {
+    maxAge: '1h',
+    setHeaders: (res) =>
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'),
+  }),
+);
 
 // Application routes must be registered above these terminal middleware handlers.
 app.use(notFound);

@@ -10,6 +10,8 @@ import {
 } from '../repositories/discovery.repository';
 import { DatingStateService } from './dating/dating-state.service';
 import { demoCompatibility, nextPlanStatus } from './discovery.rules';
+import { NotificationService } from '../notifications/notification.service';
+import { NotificationKind } from '../notifications/types';
 
 interface MatchRow {
   id: string;
@@ -23,6 +25,7 @@ interface PlanRow {
   status: string;
   proposedAt: string;
   partnerStatus: string;
+  partnerId: string;
 }
 export class DiscoveryService {
   private readonly state = new DatingStateService();
@@ -198,11 +201,37 @@ export class DiscoveryService {
         { userId, targetId },
         transaction,
       );
-      if (!reciprocal) return { matched: false, matchId: null };
+      if (!reciprocal) {
+        await new NotificationService().users(
+          [targetId],
+          {
+            key: `like:${userId}:${targetId}`,
+            kind: NotificationKind.LIKE,
+            category: 'likes',
+            title: 'Someone noticed you',
+            body: 'You have a new like. See who caught a little spark.',
+            data: {},
+          },
+          transaction,
+        );
+        return { matched: false, matchId: null };
+      }
       const [low, high] = [userId, targetId].sort();
       const [match] = await rows<{ id: string }>(
         `INSERT INTO matches (id,user_low,user_high) VALUES (:id,:low,:high) ON CONFLICT (user_low,user_high) DO UPDATE SET user_low=EXCLUDED.user_low RETURNING id`,
         { id: randomUUID(), low, high },
+        transaction,
+      );
+      await new NotificationService().users(
+        [userId, targetId],
+        {
+          key: `match:${match!.id}`,
+          kind: NotificationKind.MATCH,
+          category: 'matches',
+          title: 'It’s a mutual spark',
+          body: 'You liked each other. Say a little hello.',
+          data: { matchId: match!.id },
+        },
         transaction,
       );
       return { matched: true, matchId: match!.id };
@@ -290,7 +319,7 @@ export class DiscoveryService {
     input: { partnerId: string; proposedAt: string; note: string },
   ) {
     return sequelize.transaction(async (transaction) => {
-      await this.assertMatch(userId, matchId, transaction);
+      const match = await this.assertMatch(userId, matchId, transaction);
       const [venue] = await rows(
         `SELECT p.id FROM partners p JOIN partner_listings l ON l.partner_id=p.id AND l.is_published WHERE p.id=:partnerId AND p.status='ACTIVE' AND p.deleted_at IS NULL FOR SHARE OF p,l`,
         { partnerId: input.partnerId },
@@ -300,9 +329,21 @@ export class DiscoveryService {
         throw new Errors.NotFoundError(
           'This venue is no longer accepting date requests',
         );
-      const [plan] = await rows(
+      const [plan] = await rows<{ id: string }>(
         `INSERT INTO date_plans (id,match_id,partner_id,creator_user_id,proposed_at,note) VALUES (:id,:matchId,:partnerId,:userId,:proposedAt,:note) RETURNING id`,
         { id: randomUUID(), matchId, userId, ...input },
+        transaction,
+      );
+      await new NotificationService().users(
+        [match.user_low === userId ? match.user_high : match.user_low],
+        {
+          key: `date:${plan!.id}:invited`,
+          kind: NotificationKind.DATE_INVITED,
+          category: 'dates',
+          title: 'A little date invitation',
+          body: 'Your match invited you out. See the place and time, and let them know.',
+          data: { matchId, planId: plan!.id, venueId: input.partnerId },
+        },
         transaction,
       );
       return plan;
@@ -316,9 +357,9 @@ export class DiscoveryService {
     action: string,
   ) {
     await sequelize.transaction(async (transaction) => {
-      await this.assertMatch(userId, matchId, transaction);
+      const match = await this.assertMatch(userId, matchId, transaction);
       const [plan] = await rows<PlanRow>(
-        'SELECT id,creator_user_id AS "creatorUserId",status,proposed_at AS "proposedAt",partner_status AS "partnerStatus" FROM date_plans WHERE id=:planId AND match_id=:matchId FOR UPDATE',
+        'SELECT id,creator_user_id AS "creatorUserId",status,proposed_at AS "proposedAt",partner_status AS "partnerStatus",partner_id AS "partnerId" FROM date_plans WHERE id=:planId AND match_id=:matchId FOR UPDATE',
         { planId, matchId },
         transaction,
       );
@@ -342,6 +383,61 @@ export class DiscoveryService {
         { next, planId },
         transaction,
       );
+      const notifications = new NotificationService();
+      const data = { matchId, planId, venueId: plan.partnerId };
+      await notifications.users(
+        [match.user_low === userId ? match.user_high : match.user_low],
+        {
+          key: `date:${planId}:${next}`,
+          kind:
+            next === 'ACCEPTED'
+              ? NotificationKind.DATE_ACCEPTED
+              : next === 'DECLINED'
+                ? NotificationKind.DATE_DECLINED
+                : NotificationKind.DATE_CANCELLED,
+          category: 'dates',
+          title:
+            next === 'ACCEPTED'
+              ? 'Your date invitation was accepted'
+              : next === 'DECLINED'
+                ? 'A date invitation update'
+                : 'Your date was cancelled',
+          body:
+            next === 'ACCEPTED'
+              ? 'You’re both in. The venue will now confirm availability.'
+              : next === 'DECLINED'
+                ? 'Your match declined this invitation. You can keep chatting.'
+                : 'Your match cancelled this plan.',
+          data,
+        },
+        transaction,
+      );
+      if (
+        next === 'ACCEPTED' ||
+        (next === 'CANCELLED' && plan.status === 'ACCEPTED')
+      ) {
+        await notifications.admins(
+          plan.partnerId,
+          {
+            key: `date:${planId}:partner:${next}`,
+            kind:
+              next === 'ACCEPTED'
+                ? NotificationKind.DATE_REQUEST
+                : NotificationKind.DATE_CANCELLED,
+            category: 'dates',
+            title:
+              next === 'ACCEPTED'
+                ? 'A new date request'
+                : 'A date request was cancelled',
+            body:
+              next === 'ACCEPTED'
+                ? 'A couple accepted their invitation. Review the time and confirm availability.'
+                : 'The couple cancelled this date. Your requests have been updated.',
+            data,
+          },
+          transaction,
+        );
+      }
     });
   }
 }

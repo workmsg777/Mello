@@ -48,6 +48,9 @@ import { demoMatches, demoProfiles, demoVenues } from "./demo";
 import { ChatInbox } from "../chat/ChatInbox";
 import { useChat } from "../chat/useChat";
 import { LikesInbox } from "./LikesInbox";
+import { VenueContent } from "./VenueContent";
+import { NotificationCenter } from "../notifications/NotificationCenter";
+import type { AppNotification } from "../notifications/useNotifications";
 
 type Tab = "discover" | "likes" | "sparks" | "dates" | "profile";
 const serif = Platform.select({
@@ -392,6 +395,10 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
   const [detail, setDetail] = useState<DiscoveryCard | null>(null);
   const [celebration, setCelebration] = useState<Match | null>(null);
   const [venue, setVenue] = useState<Venue | null>(null);
+  const [contentVersion, setContentVersion] = useState(0);
+  const [venueSection, setVenueSection] = useState<"content" | "plan">(
+    "content",
+  );
   const [date, setDate] = useState(tomorrow());
   const [time, setTime] = useState("18:30");
   const [note, setNote] = useState("");
@@ -677,6 +684,47 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
     setError(null);
     scrollRef.current?.scrollTo({ y: 0, animated: false });
   };
+  const onNotification = async (item: AppNotification) => {
+    try {
+      if (item.category === "likes") {
+        selectTab("likes");
+        void load();
+        return;
+      }
+      if (item.data.matchId) {
+        const available = await discoveryApi.matches();
+        setMatches(available);
+        const match = available.find((entry) => entry.id === item.data.matchId);
+        if (!match) {
+          setNotice("This connection is no longer available.");
+          return;
+        }
+        setSelectedMatch(match);
+        if (item.category === "dates") {
+          selectTab("dates");
+          setPlans(await discoveryApi.plans(match.id));
+        } else {
+          setActiveChatId(match.id);
+          selectTab("sparks");
+        }
+      } else if (item.data.venueId) {
+        selectTab("dates");
+        const nearby = await discoveryApi.venues();
+        setVenues(nearby.venues);
+        setCity(nearby.city ?? "Your city");
+        const place = nearby.venues.find(
+          (entry) => entry.id === item.data.venueId,
+        );
+        if (place) {
+          setVenueSection("content");
+          setVenue(place);
+        } else
+          setNotice("This venue is no longer available in your selected city.");
+      }
+    } catch (caught) {
+      setError(getApiErrorMessage(caught));
+    }
+  };
   const navigation = (
     <View style={[s.navigation, wide && s.navigationWide]}>
       {tabs.map((item) => (
@@ -734,6 +782,26 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
         </View>
         {wide ? navigation : null}
         <View style={s.headerRight}>
+          <NotificationCenter
+            accountId={demo ? undefined : session.session?.account.id}
+            app="USER"
+            onOpen={(item) => void onNotification(item)}
+            onChange={(item) => {
+              if (demo) return;
+              if (selectedMatch && (!item || item.category === "dates"))
+                void discoveryApi
+                  .plans(selectedMatch.id)
+                  .then(setPlans)
+                  .catch(() => undefined);
+              if (item?.category === "offers")
+                setContentVersion((value) => value + 1);
+              if (tab === "dates" && (!item || item.category === "offers"))
+                void discoveryApi
+                  .venues()
+                  .then((nearby) => setVenues(nearby.venues))
+                  .catch(() => undefined);
+            }}
+          />
           <Ionicons name="location-outline" size={15} color={colors.coral} />
           <Text style={s.city}>{city}</Text>
           <Pressable
@@ -844,6 +912,22 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
               label="Refresh and try again"
               onPress={() => void load()}
             />
+          ) : null}
+          {!loading && tab === "discover" ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => selectTab("dates")}
+              style={s.browseVenues}
+            >
+              <Ionicons name="cafe-outline" size={22} color={colors.plum} />
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={s.browseTitle}>Browse cafés & menus</Text>
+                <Text style={s.copy}>
+                  Food photos, packages, plans & events nearby
+                </Text>
+              </View>
+              <Ionicons name="arrow-forward" size={20} color={colors.plum} />
+            </Pressable>
           ) : null}
           {!loading && tab === "discover" ? (
             <View style={[s.discoveryLayout, wide && s.discoveryWide]}>
@@ -987,11 +1071,13 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
           {!loading && tab === "dates" ? (
             <>
               <PrimaryButton
-                label="Back to conversation"
+                label={
+                  selectedMatch ? "Back to conversation" : "Back to Discover"
+                }
                 kind="ghost"
                 onPress={() => {
                   setActiveChatId(selectedMatch?.id ?? null);
-                  selectTab("sparks");
+                  selectTab(selectedMatch ? "sparks" : "discover");
                 }}
               />
               {matches.length ? (
@@ -1144,6 +1230,7 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
                       key={item.id}
                       onPress={() => {
                         setVenue(item);
+                        setVenueSection("content");
                         setError(null);
                       }}
                       style={[s.venueCard, wide && { width: "31.8%" }]}
@@ -1414,61 +1501,91 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
                     ))}
                   </View>
                   <View style={s.sheetDivider} />
-                  <Text style={s.sectionHeading}>Make a little plan</Text>
-                  {selectedMatch ? (
-                    <>
-                      <Text style={s.copy}>
-                        Invite {selectedMatch.person.profile.displayName}.
-                        Choose a date and time in your local time zone.
-                      </Text>
-                      <Field
-                        label="Date · YYYY-MM-DD"
-                        value={date}
-                        onChangeText={setDate}
-                        placeholder="2026-10-28"
-                        maxLength={10}
-                      />
-                      <Field
-                        label="Time · 24-hour, HH:mm"
-                        value={time}
-                        onChangeText={setTime}
-                        placeholder="18:30"
-                        maxLength={5}
-                      />
-                      <Field
-                        label="A little note (optional)"
-                        value={note}
-                        onChangeText={setNote}
-                        placeholder="Coffee and a walk afterwards?"
-                        multiline
-                        maxLength={500}
-                      />
-                      <ErrorNotice message={error} />
-                      <PrimaryButton
-                        label={`Invite ${selectedMatch.person.profile.displayName}`}
-                        loading={busy}
-                        onPress={() => void propose()}
-                      />
-                      <Text style={s.cardHint}>
-                        First, your person accepts. Then the venue confirms
-                        availability. No payment is collected here.
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      <Text style={s.copy}>
-                        A date starts with a connection. Match with someone to
-                        send an invitation.
-                      </Text>
-                      <PrimaryButton
-                        label="Find your spark"
-                        onPress={() => {
-                          setVenue(null);
-                          selectTab("discover");
+                  <View style={s.venueTabs}>
+                    {(["content", "plan"] as const).map((section) => (
+                      <Pressable
+                        key={section}
+                        accessibilityRole="button"
+                        accessibilityState={{
+                          selected: venueSection === section,
                         }}
-                      />
-                    </>
-                  )}
+                        onPress={() => setVenueSection(section)}
+                        style={[
+                          s.venueTab,
+                          venueSection === section && s.venueTabActive,
+                        ]}
+                      >
+                        <Text style={s.browseTitle}>
+                          {section === "content"
+                            ? "Menu & experiences"
+                            : "Plan a date"}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  {venueSection === "content" ? (
+                    <VenueContent
+                      partnerId={venue.id}
+                      demo={demo}
+                      refreshKey={contentVersion}
+                    />
+                  ) : null}
+                  {venueSection === "plan" ? (
+                    selectedMatch ? (
+                      <>
+                        <Text style={s.copy}>
+                          Invite {selectedMatch.person.profile.displayName}.
+                          Choose a date and time in your local time zone.
+                        </Text>
+                        <Field
+                          label="Date · YYYY-MM-DD"
+                          value={date}
+                          onChangeText={setDate}
+                          placeholder="2026-10-28"
+                          maxLength={10}
+                        />
+                        <Field
+                          label="Time · 24-hour, HH:mm"
+                          value={time}
+                          onChangeText={setTime}
+                          placeholder="18:30"
+                          maxLength={5}
+                        />
+                        <Field
+                          label="A little note (optional)"
+                          value={note}
+                          onChangeText={setNote}
+                          placeholder="Coffee and a walk afterwards?"
+                          multiline
+                          maxLength={500}
+                        />
+                        <ErrorNotice message={error} />
+                        <PrimaryButton
+                          label={`Invite ${selectedMatch.person.profile.displayName}`}
+                          loading={busy}
+                          onPress={() => void propose()}
+                        />
+                        <Text style={s.cardHint}>
+                          First, your person accepts. Then the venue confirms
+                          availability. No payment is collected here.
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={s.copy}>
+                          A date starts with a connection. Match with someone to
+                          send an invitation.
+                        </Text>
+                        <PrimaryButton
+                          label="Find your spark"
+                          onPress={() => {
+                            setVenue(null);
+                            selectTab("discover");
+                          }}
+                        />
+                      </>
+                    )
+                  ) : null}
                 </>
               ) : null}
             </ScrollView>
@@ -1522,6 +1639,30 @@ const s = StyleSheet.create({
   content: { paddingHorizontal: 22, paddingBottom: 45 },
   main: { maxWidth: 1100, width: "100%", alignSelf: "center" },
   pageIntro: { paddingTop: 34, paddingBottom: 28 },
+  browseVenues: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    padding: 17,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 20,
+    backgroundColor: "#FFFCFA",
+    marginBottom: 24,
+  },
+  browseTitle: { fontSize: 13, color: colors.plum, fontWeight: "700" },
+  venueTabs: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  venueTab: {
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  venueTabActive: {
+    backgroundColor: colors.coralSoft,
+    borderColor: colors.rose,
+  },
   eyebrow: {
     color: colors.coral,
     fontSize: 10,

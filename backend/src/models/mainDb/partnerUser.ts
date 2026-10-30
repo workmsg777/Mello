@@ -1,4 +1,5 @@
 import { DataTypes, Model, type Sequelize } from 'sequelize';
+import { PartnerRole } from '../../constants/partner';
 import {
   modelOptions,
   timestampAttributes,
@@ -11,7 +12,8 @@ export class PartnerUser extends Model {
   declare accountId: string;
   declare partnerId: string;
   declare name: string;
-  declare staffRole: 'OWNER' | 'MANAGER' | 'STAFF';
+  declare staffRole: PartnerRole;
+  declare invitedByAccountId: string | null;
   declare createdAt: Date;
   declare updatedAt: Date;
   declare deletedAt: Date | null;
@@ -36,9 +38,14 @@ export class PartnerUser extends Model {
           allowNull: false,
         },
         staffRole: {
-          type: DataTypes.ENUM('OWNER', 'MANAGER', 'STAFF'),
+          type: DataTypes.ENUM(...Object.values(PartnerRole)),
           allowNull: false,
           field: 'staff_role',
+        },
+        invitedByAccountId: {
+          type: DataTypes.UUID,
+          allowNull: true,
+          field: 'invited_by_account_id',
         },
         ...timestampAttributes(true),
       },

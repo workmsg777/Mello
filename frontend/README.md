@@ -1,5 +1,7 @@
 # Mello mobile frontend
 
+For separately installable Mello and Mello Partner APKs, follow [the Android build guide](../docs/android-builds.md). Each app has its own `eas.json`, `build:apk` and `build:aab` commands.
+
 Expo mobile client for dating-user authentication and restart-safe profile onboarding. It uses Expo Router, Redux Toolkit, Axios, SecureStore, and ImagePicker; the backend catalog and state endpoints are the source of truth.
 
 The mobile apps use Expo SDK 58. Use the SDK 58 version of Expo Go. After an SDK upgrade, stop the old Metro server and run `npx expo start --clear` before scanning the new QR code.
@@ -53,3 +55,5 @@ Never enable `OTP_EXPOSE_IN_RESPONSE` in production.
 npm run typecheck
 npx expo-doctor
 ```
+
+Notifications appear in the header bell. See [notification deployment](../backend/docs/notifications.md) for background push credentials, native builds and scalability validation.

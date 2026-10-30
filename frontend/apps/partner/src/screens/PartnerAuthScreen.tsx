@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PartnerDashboard } from "./PartnerDashboard";
+import { CitySelect } from "../components/CitySelect";
 import {
   API_BASE_URL,
   registerPartnerExpiryHandler,
@@ -278,12 +279,12 @@ export function PartnerAuthScreen() {
                 : step === "phone"
                   ? mode === "signup"
                     ? "Secure your business account."
-                    : "Welcome back, partner."
+                    : "Welcome back, café team."
                   : "Verify your number."}
             </Text>
             <Text style={styles.subtitle}>
               {step === "business"
-                ? "Tell us about the place or experience you bring to Mello."
+                ? "Register as your café’s partner admin. Add your team after verifying your number."
                 : step === "phone"
                   ? "We use a one-time code instead of a password."
                   : `Code sent to +91 ${phone.slice(0, 5)} ${phone.slice(5)}.`}
@@ -368,26 +369,23 @@ export function PartnerAuthScreen() {
                   placeholder="Area or landmark"
                   autoCapitalize="words"
                 />
-                <View style={styles.twoColumns}>
-                  <View style={styles.column}>
-                    <Field
-                      label="City"
-                      value={partner.city}
-                      onChangeText={(value) => updatePartner("city", value)}
-                      placeholder="City"
-                      autoCapitalize="words"
-                    />
-                  </View>
-                  <View style={styles.column}>
-                    <Field
-                      label="State"
-                      value={partner.state}
-                      onChangeText={(value) => updatePartner("state", value)}
-                      placeholder="State"
-                      autoCapitalize="words"
-                    />
-                  </View>
-                </View>
+                <CitySelect
+                  value={partner.city}
+                  onSelect={(city) =>
+                    setPartner((current) => ({
+                      ...current,
+                      city: city.value,
+                      state: city.state,
+                      countryCode: city.countryCode,
+                    }))
+                  }
+                />
+                <Field
+                  label="State · filled automatically"
+                  value={partner.state}
+                  editable={false}
+                  placeholder="Select a city first"
+                />
                 <View style={styles.twoColumns}>
                   <View style={styles.column}>
                     <Field
@@ -459,7 +457,8 @@ export function PartnerAuthScreen() {
                   />
                 </View>
                 <Text style={styles.helper}>
-                  Use the number connected to the business owner account.
+                  Use the owner’s number or the employee number registered by
+                  your café admin.
                 </Text>
                 {error ? <Text style={styles.error}>{error}</Text> : null}
                 <Pressable

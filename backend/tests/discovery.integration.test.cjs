@@ -1022,3 +1022,141 @@ test('exhausted discovery reshuffles passes without repeats, respects preference
   await api(a, 'GET', '/discovery/feed?after=' + randomUUID(), undefined, 400);
   await api(a, 'GET', '/discovery/feed?shuffleSeed=bad', undefined, 400);
 });
+
+test('dating users can browse published cafe offerings and photos but cannot manage content', async (t) => {
+  const bytes = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jK1sAAAAASUVORK5CYII=',
+    'base64',
+  );
+  const form = new FormData();
+  form.append('photo', new File([bytes], 'menu.png', { type: 'image/png' }));
+  const upload = await fetch(`${base}/partner/photos`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${partner.token}` },
+    body: form,
+  });
+  assert.equal(upload.status, 201);
+  const photo = await upload.json();
+  t.after(() =>
+    require('node:fs/promises').unlink(
+      path.resolve('uploads/partner-photos', path.basename(photo.url)),
+    ),
+  );
+  const publishedIds = [];
+  for (const kind of ['MENU', 'PACKAGE', 'PLAN', 'EVENT']) {
+    const title = `Published ${kind}`;
+    const content = await api(
+      partner,
+      'POST',
+      '/partner/content',
+      {
+        kind,
+        title,
+        description: 'Food, drinks and experiences from the cafe.',
+        priceInr: 250,
+        isPublished: true,
+        photoIds: [photo.id],
+        ...(kind === 'EVENT'
+          ? { startsAt: new Date(Date.now() + 86400000).toISOString() }
+          : {}),
+      },
+      201,
+    );
+    publishedIds.push(content.find((item) => item.title === title).id);
+  }
+  await api(
+    partner,
+    'POST',
+    '/partner/content',
+    { kind: 'MENU', title: 'Hidden draft' },
+    201,
+  );
+  await api(
+    partner,
+    'POST',
+    '/partner/content',
+    {
+      kind: 'EVENT',
+      title: 'Expired event',
+      isPublished: true,
+      startsAt: new Date(Date.now() - 86400000).toISOString(),
+    },
+    201,
+  );
+  const removed = await api(
+    partner,
+    'POST',
+    '/partner/content',
+    { kind: 'MENU', title: 'Removed menu', isPublished: true },
+    201,
+  );
+  await api(
+    partner,
+    'DELETE',
+    `/partner/content/${removed.find((item) => item.title === 'Removed menu').id}`,
+  );
+  const route = `/discovery/venues/${venueId}/content`;
+  await api(null, 'GET', route, undefined, 401);
+  await api(draft, 'GET', route, undefined, 403);
+  await api(partner, 'GET', route, undefined, 403);
+  const visible = await api(a, 'GET', route);
+  assert.deepEqual(visible.map((item) => item.id).sort(), publishedIds.sort());
+  for (const item of visible) {
+    assert.equal(item.priceInr, 250);
+    assert.equal(
+      item.description,
+      'Food, drinks and experiences from the cafe.',
+    );
+    assert.deepEqual(item.photos, [photo]);
+    assert.equal(item.photoIds, undefined);
+    assert.equal(item.isPublished, undefined);
+    assert.equal(item.updatedAt, undefined);
+  }
+  const image = await fetch(new URL(visible[0].photos[0].url, base));
+  assert.equal(image.status, 200);
+  assert.deepEqual(Buffer.from(await image.arrayBuffer()), bytes);
+  for (const [method, url] of [
+    ['POST', '/partner/content'],
+    ['PUT', `/partner/content/${publishedIds[0]}`],
+    ['DELETE', `/partner/content/${publishedIds[0]}`],
+  ]) {
+    await api(
+      a,
+      method,
+      url,
+      { kind: 'MENU', title: 'Unauthorized edit' },
+      403,
+    );
+  }
+  await api(
+    partnerOther,
+    'PUT',
+    `/partner/content/${publishedIds[0]}`,
+    { kind: 'MENU', title: 'Other cafe edit' },
+    404,
+  );
+  try {
+    await query(
+      'UPDATE partner_listings SET is_published=false WHERE partner_id=:id',
+      { id: venueId },
+    );
+    assert.deepEqual(await api(a, 'GET', route), []);
+    await query(
+      'UPDATE partner_listings SET is_published=true WHERE partner_id=:id',
+      { id: venueId },
+    );
+    await query("UPDATE partners SET status='INACTIVE' WHERE id=:id", {
+      id: venueId,
+    });
+    assert.deepEqual(await api(a, 'GET', route), []);
+  } finally {
+    await query(
+      'UPDATE partner_listings SET is_published=true WHERE partner_id=:id',
+      { id: venueId },
+    );
+    await query("UPDATE partners SET status='ACTIVE' WHERE id=:id", {
+      id: venueId,
+    });
+  }
+  assert.equal((await api(a, 'GET', route)).length, 4);
+});
