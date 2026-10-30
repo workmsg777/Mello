@@ -34,6 +34,17 @@ export interface Venue {
   tags: string[];
   distanceKm: number | null;
 }
+export type VenueOfferingKind = "MENU" | "PLAN" | "PACKAGE" | "EVENT";
+export interface VenueOffering {
+  id: string;
+  kind: VenueOfferingKind;
+  title: string;
+  description: string;
+  priceInr: number | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  photos: { id: string; url: string }[];
+}
 export interface DatePlan {
   id: string;
   matchId: string;

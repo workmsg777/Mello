@@ -12,6 +12,7 @@ Mello is an Expo dating app with a separate partner app for cafés, restaurants 
 - Clearly labelled demo compatibility percentages (the real matching algorithm is intentionally deferred).
 - Nearby published venues, date invitations, acceptance/cancellation and partner confirmation.
 - Partner business registration, listing drafts/publication, pricing, photos by HTTPS URL, and a date-request inbox.
+- Partner admins can register support employees who verify their own OTP before managing café menus/photos, plans, packages and events. Roles and supported city/state mappings come from central enums; choosing a city fills its state. See [the partner team guide](backend/docs/partner-team-and-content.md).
 - Romantic user interface with an animated login, swipe gestures, match celebration, profile details and empty/error states.
 
 ## Preview the design without a backend

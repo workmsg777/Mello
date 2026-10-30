@@ -1,0 +1,20 @@
+{
+  "cli": { "appVersionSource": "remote" },
+  "build": {
+    "base": {
+      "env": { "NPM_CONFIG_LEGACY_PEER_DEPS": "true" }
+    },
+    "preview": {
+      "extends": "base",
+      "distribution": "internal",
+      "environment": "preview",
+      "android": { "buildType": "apk" }
+    },
+    "production": {
+      "extends": "base",
+      "environment": "production",
+      "autoIncrement": true,
+      "android": { "buildType": "app-bundle" }
+    }
+  }
+}
