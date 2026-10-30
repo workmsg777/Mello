@@ -55,3 +55,5 @@ Never enable `OTP_EXPOSE_IN_RESPONSE` in production.
 npm run typecheck
 npx expo-doctor
 ```
+
+Notifications appear in the header bell. See [notification deployment](../backend/docs/notifications.md) for background push credentials, native builds and scalability validation.

@@ -4,6 +4,8 @@ import { sequelize } from '../config/database';
 import Errors from '../errors';
 import { rows, mutualLikesSql } from '../repositories/discovery.repository';
 import { DiscoveryService } from './discovery.service';
+import { NotificationService } from '../notifications/notification.service';
+import { NotificationKind } from '../notifications/types';
 
 export const chatId = z.string().uuid();
 export const sendMessageSchema = z.object({
@@ -123,6 +125,22 @@ export class ChatService {
       const [message] = await rows<ChatMessage>(
         `INSERT INTO chat_messages (id,match_id,sender_id,client_message_id,sequence,body) VALUES (:id,:matchId,:userId,:clientMessageId,:sequence,:body) RETURNING ${messageColumns}`,
         { ...input, id: randomUUID(), userId, sequence: position!.sequence },
+        transaction,
+      );
+      await new NotificationService().users(
+        [peerId],
+        {
+          key: `message:${message!.id}`,
+          kind: NotificationKind.MESSAGE,
+          category: 'messages',
+          title: 'A new message',
+          body: 'Your match sent you a message.',
+          data: {
+            matchId: input.matchId,
+            messageId: message!.id,
+            sequence: message!.sequence,
+          },
+        },
         transaction,
       );
       return { message: message!, peerId, duplicate: false };

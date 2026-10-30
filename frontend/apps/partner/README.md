@@ -65,3 +65,5 @@ Never expose the OTP in API responses in production.
 3. Request and verify the OTP.
 
 Dating-user and platform-user accounts are rejected by this app after verification.
+
+The header bell receives live date requests and cancellations for partner admins. Tapping an update opens Requests. See [notification setup](../../../backend/docs/notifications.md) to enable phone push in an installed build.

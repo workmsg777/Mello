@@ -19,6 +19,7 @@ import { PartnerTeam } from "./PartnerTeam";
 import { PartnerContent } from "./PartnerContent";
 import { CitySelect } from "../components/CitySelect";
 import type { Permissions } from "../services/partner.service";
+import { NotificationCenter } from "../features/notifications/NotificationCenter";
 
 type Kind = "CAFE" | "RESTAURANT" | "ACTIVITY";
 interface Venue {
@@ -212,6 +213,26 @@ export function PartnerDashboard({
           mello<Text style={{ color: "#C67C86" }}>.</Text>
           <Text style={s.partnerLabel}> PARTNER</Text>
         </Text>
+        <NotificationCenter
+          accountId={session.account.id}
+          app="PARTNER"
+          onChange={() => {
+            if (permissions.manageRequests)
+              void api
+                .get<DateRequest[]>("/partner/requests")
+                .then((result) => setRequests(result.data))
+                .catch(() => undefined);
+          }}
+          onOpen={() => {
+            if (permissions.manageRequests) {
+              setTab("requests");
+              void api
+                .get<DateRequest[]>("/partner/requests")
+                .then((result) => setRequests(result.data))
+                .catch((caught) => setError(getApiErrorMessage(caught)));
+            }
+          }}
+        />
         <Pressable
           accessibilityRole="button"
           disabled={busy}

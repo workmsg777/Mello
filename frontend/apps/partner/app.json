@@ -13,7 +13,8 @@
         {
           "photosPermission": "Mello Partner uses your photos to publish café menus, packages and events."
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "android": {
       "package": "com.mello.partner",

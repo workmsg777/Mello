@@ -54,9 +54,11 @@ const categories: {
 export function VenueContent({
   partnerId,
   demo,
+  refreshKey = 0,
 }: {
   partnerId: string;
   demo: boolean;
+  refreshKey?: number;
 }) {
   const [items, setItems] = useState<VenueOffering[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,11 +87,13 @@ export function VenueContent({
     } finally {
       if (generation.current === request) setLoading(false);
     }
-  }, [partnerId, demo]);
+  }, [partnerId, demo, refreshKey]);
   useEffect(() => {
     setFilter("ALL");
     setItems([]);
     setGallery(null);
+  }, [partnerId, demo]);
+  useEffect(() => {
     void load();
     return () => {
       generation.current++;

@@ -49,6 +49,8 @@ import { ChatInbox } from "../chat/ChatInbox";
 import { useChat } from "../chat/useChat";
 import { LikesInbox } from "./LikesInbox";
 import { VenueContent } from "./VenueContent";
+import { NotificationCenter } from "../notifications/NotificationCenter";
+import type { AppNotification } from "../notifications/useNotifications";
 
 type Tab = "discover" | "likes" | "sparks" | "dates" | "profile";
 const serif = Platform.select({
@@ -393,6 +395,7 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
   const [detail, setDetail] = useState<DiscoveryCard | null>(null);
   const [celebration, setCelebration] = useState<Match | null>(null);
   const [venue, setVenue] = useState<Venue | null>(null);
+  const [contentVersion, setContentVersion] = useState(0);
   const [venueSection, setVenueSection] = useState<"content" | "plan">(
     "content",
   );
@@ -681,6 +684,47 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
     setError(null);
     scrollRef.current?.scrollTo({ y: 0, animated: false });
   };
+  const onNotification = async (item: AppNotification) => {
+    try {
+      if (item.category === "likes") {
+        selectTab("likes");
+        void load();
+        return;
+      }
+      if (item.data.matchId) {
+        const available = await discoveryApi.matches();
+        setMatches(available);
+        const match = available.find((entry) => entry.id === item.data.matchId);
+        if (!match) {
+          setNotice("This connection is no longer available.");
+          return;
+        }
+        setSelectedMatch(match);
+        if (item.category === "dates") {
+          selectTab("dates");
+          setPlans(await discoveryApi.plans(match.id));
+        } else {
+          setActiveChatId(match.id);
+          selectTab("sparks");
+        }
+      } else if (item.data.venueId) {
+        selectTab("dates");
+        const nearby = await discoveryApi.venues();
+        setVenues(nearby.venues);
+        setCity(nearby.city ?? "Your city");
+        const place = nearby.venues.find(
+          (entry) => entry.id === item.data.venueId,
+        );
+        if (place) {
+          setVenueSection("content");
+          setVenue(place);
+        } else
+          setNotice("This venue is no longer available in your selected city.");
+      }
+    } catch (caught) {
+      setError(getApiErrorMessage(caught));
+    }
+  };
   const navigation = (
     <View style={[s.navigation, wide && s.navigationWide]}>
       {tabs.map((item) => (
@@ -738,6 +782,26 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
         </View>
         {wide ? navigation : null}
         <View style={s.headerRight}>
+          <NotificationCenter
+            accountId={demo ? undefined : session.session?.account.id}
+            app="USER"
+            onOpen={(item) => void onNotification(item)}
+            onChange={(item) => {
+              if (demo) return;
+              if (selectedMatch && (!item || item.category === "dates"))
+                void discoveryApi
+                  .plans(selectedMatch.id)
+                  .then(setPlans)
+                  .catch(() => undefined);
+              if (item?.category === "offers")
+                setContentVersion((value) => value + 1);
+              if (tab === "dates" && (!item || item.category === "offers"))
+                void discoveryApi
+                  .venues()
+                  .then((nearby) => setVenues(nearby.venues))
+                  .catch(() => undefined);
+            }}
+          />
           <Ionicons name="location-outline" size={15} color={colors.coral} />
           <Text style={s.city}>{city}</Text>
           <Pressable
@@ -1460,7 +1524,11 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
                     ))}
                   </View>
                   {venueSection === "content" ? (
-                    <VenueContent partnerId={venue.id} demo={demo} />
+                    <VenueContent
+                      partnerId={venue.id}
+                      demo={demo}
+                      refreshKey={contentVersion}
+                    />
                   ) : null}
                   {venueSection === "plan" ? (
                     selectedMatch ? (

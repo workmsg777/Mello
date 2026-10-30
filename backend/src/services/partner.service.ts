@@ -9,6 +9,8 @@ import { normalizePhoneNumber } from '../utils/phone';
 import { sequelize } from '../config/database';
 import Errors from '../errors';
 import { rows } from '../repositories/discovery.repository';
+import { NotificationService } from '../notifications/notification.service';
+import { NotificationKind } from '../notifications/types';
 
 export interface ListingInput {
   name: string;
@@ -84,6 +86,10 @@ export class PartnerService {
         },
         transaction,
       );
+      await new NotificationService().announceContent(
+        staff.partnerId,
+        transaction,
+      );
     });
     return this.get(accountId);
   }
@@ -96,15 +102,48 @@ export class PartnerService {
     );
   }
   async respond(accountId: string, planId: string, status: string) {
-    const staff = await this.authorize(accountId, 'manageRequests');
-    const changed = await rows(
-      `UPDATE date_plans SET partner_status=:status,updated_at=now() WHERE id=:planId AND partner_id=:partnerId AND status='ACCEPTED' AND partner_status='PENDING' AND proposed_at>now() RETURNING id`,
-      { status, planId, partnerId: staff.partnerId },
-    );
-    if (!changed.length)
-      throw new Errors.ConflictError(
-        'This request is unavailable or has already been answered',
+    await sequelize.transaction(async (transaction) => {
+      const staff = await this.authorize(
+        accountId,
+        'manageRequests',
+        transaction,
       );
+      const [changed] = await rows<{ match_id: string }>(
+        `UPDATE date_plans SET partner_status=:status,updated_at=now() WHERE id=:planId AND partner_id=:partnerId AND status='ACCEPTED' AND partner_status='PENDING' AND proposed_at>now() RETURNING match_id`,
+        { status, planId, partnerId: staff.partnerId },
+        transaction,
+      );
+      if (!changed)
+        throw new Errors.ConflictError(
+          'This request is unavailable or has already been answered',
+        );
+      const [match] = await rows<{ user_low: string; user_high: string }>(
+        'SELECT user_low,user_high FROM matches WHERE id=:id',
+        { id: changed.match_id },
+        transaction,
+      );
+      await new NotificationService().users(
+        [match!.user_low, match!.user_high],
+        {
+          key: `date:${planId}:venue:${status}`,
+          kind:
+            status === 'CONFIRMED'
+              ? NotificationKind.VENUE_CONFIRMED
+              : NotificationKind.VENUE_DECLINED,
+          category: 'dates',
+          title:
+            status === 'CONFIRMED'
+              ? 'Your date is confirmed'
+              : 'The venue is unavailable',
+          body:
+            status === 'CONFIRMED'
+              ? 'The venue confirmed your date. Your little plan is ready.'
+              : 'The venue could not confirm this time. Choose another place or time together.',
+          data: { matchId: changed.match_id, planId, venueId: staff.partnerId },
+        },
+        transaction,
+      );
+    });
   }
   async team(accountId: string) {
     const staff = await this.authorize(accountId, 'manageTeam');

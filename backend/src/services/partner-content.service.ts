@@ -7,6 +7,7 @@ import Errors from '../errors';
 import { rows } from '../repositories/discovery.repository';
 import { PartnerContentKind } from '../constants/partner';
 import { PartnerService } from './partner.service';
+import { NotificationService } from '../notifications/notification.service';
 
 export const partnerContentSchema = z
   .object({
@@ -89,6 +90,10 @@ export class PartnerContentService {
         transaction,
       );
       if (!changed.length) throw new Errors.NotFoundError('Content not found');
+      await new NotificationService().announceContent(
+        staff.partnerId,
+        transaction,
+      );
     });
     return this.list(accountId);
   }
