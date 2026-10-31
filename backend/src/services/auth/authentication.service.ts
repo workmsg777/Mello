@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { authConfig, requireJwtSecret } from '../../config/auth';
 import { sequelize } from '../../config/database';
 import Errors from '../../errors';
+import { partnerLocation } from '../../constants/partner';
 import {
   AuthenticationRepository,
   type AccountProfile,
@@ -63,6 +64,13 @@ export class AuthenticationService {
   ): Promise<AuthResponse> {
     requireJwtSecret();
     const phone = normalizePhoneNumber(input.phone);
+
+    if (input.accountType === 'PARTNER_USER')
+      partnerLocation(
+        input.partner.city,
+        input.partner.state,
+        input.partner.countryCode,
+      );
 
     if (input.accountType === 'PLATFORM_USER') {
       this.assertPlatformRegistrationKey(input.platformUser.registrationKey);
@@ -129,7 +137,14 @@ export class AuthenticationService {
 
     // Keep the outward response identical without sending SMS messages to
     // arbitrary unregistered numbers.
-    if (!identity?.verifiedAt || account?.status !== 'ACTIVE') {
+    const invited =
+      account?.status === 'PENDING' &&
+      account.accountType === 'PARTNER_USER' &&
+      (await this.repository.isInvitedSupport(account.id));
+    if (
+      !identity ||
+      (!invited && (!identity.verifiedAt || account?.status !== 'ACTIVE'))
+    ) {
       return {
         message: 'If the account exists, an OTP has been sent',
         expiresIn: authConfig.otpTtlSeconds,
@@ -158,7 +173,7 @@ export class AuthenticationService {
 
     try {
       const identity = await this.repository.findPhoneIdentity(phone);
-      if (!identity || !identity.verifiedAt) {
+      if (!identity) {
         await this.otpService.consume(lease);
         throw new Errors.UnauthorizedError('Account or OTP is invalid');
       }
@@ -168,7 +183,15 @@ export class AuthenticationService {
         await this.otpService.consume(lease);
         throw new Errors.UnauthorizedError('Account or OTP is invalid');
       }
-      this.assertActiveAccount(account.status);
+      const invited =
+        account.status === 'PENDING' &&
+        account.accountType === 'PARTNER_USER' &&
+        (await this.repository.isInvitedSupport(account.id));
+      if (!invited) {
+        if (!identity.verifiedAt)
+          throw new Errors.UnauthorizedError('Account or OTP is invalid');
+        this.assertActiveAccount(account.status);
+      }
 
       const refreshToken = this.tokenService.createRefreshToken();
       const refreshTokenHash = this.tokenService.hashRefreshToken(refreshToken);
@@ -177,6 +200,16 @@ export class AuthenticationService {
       );
 
       const result = await sequelize.transaction(async (transaction) => {
+        await account.reload({ transaction, lock: transaction.LOCK.UPDATE });
+        if (
+          account.status === 'PENDING' &&
+          invited &&
+          (await this.repository.isInvitedSupport(account.id, transaction))
+        ) {
+          await account.update({ status: 'ACTIVE' }, { transaction });
+          await identity.update({ verifiedAt: new Date() }, { transaction });
+        }
+        this.assertActiveAccount(account.status);
         await this.repository.touchIdentity(identity.id, transaction);
         const session = await this.repository.createSession(
           account.id,

@@ -1,5 +1,6 @@
 import { Op, type Transaction } from 'sequelize';
 import Errors from '../errors';
+import { PartnerRole, partnerLocation } from '../constants/partner';
 import {
   Account,
   AccountRole,
@@ -36,6 +37,24 @@ export interface AccountProfile {
 }
 
 export class AuthenticationRepository {
+  async isInvitedSupport(
+    accountId: string,
+    transaction?: Transaction,
+  ): Promise<boolean> {
+    const staff = await PartnerUser.findOne({
+      where: {
+        accountId,
+        staffRole: PartnerRole.SUPPORT,
+        invitedByAccountId: { [Op.ne]: null },
+      },
+      ...(transaction ? { transaction } : {}),
+    });
+    if (!staff) return false;
+    return !!(await Partner.findOne({
+      where: { id: staff.partnerId, status: 'ACTIVE' },
+      ...(transaction ? { transaction } : {}),
+    }));
+  }
   findPhoneIdentity(
     phone: string,
     transaction?: Transaction,
@@ -207,6 +226,7 @@ export class AuthenticationRepository {
         throw new Errors.BadRequestError('Partner signup data is required');
       }
       const data = input.partner;
+      const location = partnerLocation(data.city, data.state, data.countryCode);
       const partner = await Partner.create(
         {
           name: data.businessName,
@@ -214,8 +234,8 @@ export class AuthenticationRepository {
           description: data.description ?? null,
           addressLine1: data.addressLine1,
           addressLine2: data.addressLine2 ?? null,
-          city: data.city,
-          state: data.state,
+          city: location.city,
+          state: location.state,
           postalCode: data.postalCode,
           countryCode: data.countryCode,
           latitude: data.latitude ?? null,
@@ -231,7 +251,7 @@ export class AuthenticationRepository {
           accountId,
           partnerId: partner.id,
           name: data.ownerName,
-          staffRole: 'OWNER',
+          staffRole: PartnerRole.ADMIN,
         },
         { transaction },
       );

@@ -19,7 +19,10 @@
     "db:validate": "node database/validate-schema.js",
     "db:validate:dating": "node database/validate-dating-profile-schema.js",
     "test": "npm run typecheck && node --import tsx --test tests/*.test.cjs",
-    "test:integration": "node --import tsx --test tests/*.test.cjs"
+    "test:integration": "node --import tsx --test tests/*.test.cjs",
+    "start:notifications": "node dist/notifications/main.js",
+    "db:validate:notifications": "node database/validate-notifications.js",
+    "test:load:notifications": "node scripts/load-notifications.cjs"
   },
   "keywords": [],
   "author": "",

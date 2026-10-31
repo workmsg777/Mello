@@ -63,6 +63,32 @@ services:
     volumes:
       - mello_uploads:/app/uploads
 
+  notification-worker:
+    profiles: ['workers']
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    stop_grace_period: 60s
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: dating_db
+      DB_USER: dating_user
+      DB_PASSWORD: dating_password
+      REDIS_URL: redis://redis:6379
+    command: ['node', 'dist/notifications/main.js']
+    depends_on:
+      backend:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   dating_postgres_data:
   mello_uploads:

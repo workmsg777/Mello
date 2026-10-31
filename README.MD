@@ -12,6 +12,7 @@ Mello is an Expo dating app with a separate partner app for cafés, restaurants 
 - Clearly labelled demo compatibility percentages (the real matching algorithm is intentionally deferred).
 - Nearby published venues, date invitations, acceptance/cancellation and partner confirmation.
 - Partner business registration, listing drafts/publication, pricing, photos by HTTPS URL, and a date-request inbox.
+- Partner admins can register support employees who verify their own OTP before managing café menus/photos, plans, packages and events. Roles and supported city/state mappings come from central enums; choosing a city fills its state. See [the partner team guide](backend/docs/partner-team-and-content.md).
 - Romantic user interface with an animated login, swipe gestures, match celebration, profile details and empty/error states.
 
 ## Preview the design without a backend
@@ -69,3 +70,5 @@ The integration tests use an isolated embedded PostgreSQL instance and test acco
 ## Before a public launch
 
 For real SMS, set OTP_DELIVERY_MODE=twilio and configure TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_MESSAGING_SERVICE_SID (or TWILIO_FROM_NUMBER) in backend/.env. Set OTP_EXPOSE_IN_RESPONSE=false in production. The Twilio adapter has mocked contract tests; actual carrier delivery requires your configured provider account and sender. Console delivery remains available for local development. Compatibility scores are UI demonstrations, not a validated matching algorithm. Date plans use manual partner confirmation; payments, chat attachments, push notifications, inventory/capacity, moderation and identity verification are not included in this milestone. Preview photos use remote sample imagery; real profiles use the user's uploaded photos. Physical Android/iOS testing and production PostgreSQL concurrency checks remain necessary.
+
+Notification inboxes and push delivery: see [the implementation and deployment guide](backend/docs/notifications.md). Both apps have a notification bell for chat, dates and venue updates, plus nearby published package/event announcements.

@@ -182,3 +182,51 @@ export const demoMatches: Match[] = [
     person: demoProfiles[1]!,
   },
 ];
+
+export const demoVenueOfferings: import("../../types/discovery").VenueOffering[] =
+  [
+    {
+      id: "demo-menu",
+      kind: "MENU",
+      title: "Coffee & little bites",
+      description:
+        "Cappuccino · ₹180\nIced latte · ₹200\nMasala chai · ₹120\nGrilled sandwich · ₹240\nChocolate brownie · ₹190\n\nSample menu for this design preview.",
+      priceInr: null,
+      startsAt: null,
+      endsAt: null,
+      photos: [{ id: "demo-coffee-photo", url: demoVenues[0]!.imageUrl! }],
+    },
+    {
+      id: "demo-package",
+      kind: "PACKAGE",
+      title: "Coffee for two",
+      description:
+        "Two coffees, a sharing dessert and a cosy corner for your conversation. Sample package for this design preview.",
+      priceInr: 650,
+      startsAt: null,
+      endsAt: null,
+      photos: [],
+    },
+    {
+      id: "demo-plan",
+      kind: "PLAN",
+      title: "An unhurried afternoon",
+      description:
+        "Start with coffee, share something sweet and take a little walk afterwards. Sample plan for this design preview.",
+      priceInr: null,
+      startsAt: null,
+      endsAt: null,
+      photos: [],
+    },
+    {
+      id: "demo-event",
+      kind: "EVENT",
+      title: "Acoustic evenings",
+      description:
+        "A little live music, warm drinks and lovely company. Sample event for this design preview.",
+      priceInr: 300,
+      startsAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+      endsAt: null,
+      photos: [],
+    },
+  ];

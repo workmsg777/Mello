@@ -7,6 +7,7 @@ import type {
   DiscoveryFeed,
   Venue,
   VenueKind,
+  VenueOffering,
 } from "../types/discovery";
 export const discoveryApi = {
   async feed(cycle: { shuffleSeed?: string; after?: string } = {}) {
@@ -44,6 +45,11 @@ export const discoveryApi = {
   async plans(matchId: string) {
     return (await api.get<DatePlan[]>(`/discovery/matches/${matchId}/plans`))
       .data;
+  },
+  async venueContent(partnerId: string) {
+    return (
+      await api.get<VenueOffering[]>(`/discovery/venues/${partnerId}/content`)
+    ).data;
   },
   async propose(
     matchId: string,

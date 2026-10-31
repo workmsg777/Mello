@@ -6,6 +6,16 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Mello Partner uses your photos to publish café menus, packages and events."
+        }
+      ],
+      "expo-notifications"
+    ],
     "android": {
       "package": "com.mello.partner",
       "predictiveBackGestureEnabled": false

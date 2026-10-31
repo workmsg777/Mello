@@ -1,6 +1,7 @@
 import { z, ZodError, type ZodType } from 'zod';
 import Errors from '../../errors';
 import { accountTypes } from '../../types/auth';
+import { partnerLocation } from '../../constants/partner';
 
 const phoneSchema = z.string().trim().min(8).max(32);
 const otpSchema = z
@@ -16,26 +17,31 @@ const deviceSchema = z
   })
   .optional();
 
-const partnerSignupSchema = z.object({
-  ownerName: z.string().trim().min(1).max(200),
-  businessName: z.string().trim().min(1).max(200),
-  category: z.enum(['CAFE', 'HOTEL', 'ACTIVITY', 'OTHER', 'RESTAURANT']),
-  description: z.string().trim().max(5_000).optional(),
-  addressLine1: z.string().trim().min(1).max(255),
-  addressLine2: z.string().trim().max(255).optional(),
-  city: z.string().trim().min(1).max(120),
-  state: z.string().trim().min(1).max(120),
-  postalCode: z.string().trim().min(1).max(20),
-  countryCode: z
-    .string()
-    .trim()
-    .length(2)
-    .transform((value) => value.toUpperCase()),
-  latitude: z.number().min(-90).max(90).optional(),
-  longitude: z.number().min(-180).max(180).optional(),
-  businessPhone: phoneSchema.optional(),
-  businessEmail: z.string().trim().email().max(320).optional(),
-});
+const partnerSignupSchema = z
+  .object({
+    ownerName: z.string().trim().min(1).max(200),
+    businessName: z.string().trim().min(1).max(200),
+    category: z.enum(['CAFE', 'HOTEL', 'ACTIVITY', 'OTHER', 'RESTAURANT']),
+    description: z.string().trim().max(5_000).optional(),
+    addressLine1: z.string().trim().min(1).max(255),
+    addressLine2: z.string().trim().max(255).optional(),
+    city: z.string().trim().min(1).max(120),
+    state: z.string().trim().max(120).optional().default(''),
+    postalCode: z.string().trim().min(1).max(20),
+    countryCode: z
+      .string()
+      .trim()
+      .length(2)
+      .transform((value) => value.toUpperCase()),
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
+    businessPhone: phoneSchema.optional(),
+    businessEmail: z.string().trim().email().max(320).optional(),
+  })
+  .transform((data) => ({
+    ...data,
+    ...partnerLocation(data.city, data.state, data.countryCode),
+  }));
 
 const platformSignupSchema = z.object({
   name: z.string().trim().min(1).max(200),

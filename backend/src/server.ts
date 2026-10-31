@@ -12,6 +12,11 @@ import { createServer } from 'node:http';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { redis } from './config/redis';
 import { createChatServer } from './realtime/chat-server';
+import {
+  createNotificationGateway,
+  notificationChannel,
+} from './notifications/gateway';
+import { startNotificationWorker } from './notifications/worker';
 
 const port = Number(process.env.PORT ?? 3000);
 
@@ -27,18 +32,45 @@ async function start(): Promise<void> {
     sub = redis.duplicate();
   await Promise.all([pub.connect(), sub.connect()]);
   io.adapter(createAdapter(pub, sub, { key: 'mello:chat' }));
+  const deliverNotifications = createNotificationGateway(io);
+  const notificationSub = redis.duplicate();
+  await notificationSub.connect();
+  notificationSub.on('message', (channel, payload) => {
+    if (channel !== notificationChannel) return;
+    try {
+      const ids: unknown = JSON.parse(payload);
+      if (
+        Array.isArray(ids) &&
+        ids.length <= 100 &&
+        ids.every((id) => typeof id === 'string')
+      )
+        deliverNotifications(ids);
+    } catch {
+      console.error('Invalid notification invalidation ignored.');
+    }
+  });
+  await notificationSub.subscribe(notificationChannel);
+  const stopNotifications =
+    process.env.NOTIFICATION_WORKER_ENABLED === 'false'
+      ? async () => {}
+      : startNotificationWorker();
   server.listen(port, () => {
     console.log(`Mello API listening on port ${port}`);
   });
 
   const shutdown = (): void => {
     io.close(() => {
-      void Promise.allSettled([
-        pub.quit(),
-        sub.quit(),
-        disconnectDatabase(),
-        disconnectRedis(),
-      ]).finally(() => process.exit(0));
+      void stopNotifications()
+        .then(() =>
+          Promise.allSettled([
+            notificationSub.quit(),
+            pub.quit(),
+            sub.quit(),
+            disconnectDatabase(),
+            disconnectRedis(),
+          ]),
+        )
+        .finally(() => process.exit(0));
     });
   };
 

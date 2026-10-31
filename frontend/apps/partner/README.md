@@ -1,5 +1,9 @@
 # Mello Partner app
 
+Admins register their café, select a supported city (state fills automatically), and add employees in **Your team** as **Partner support**. Employees choose **Partner login**, verify their own OTP, then manage **Menus & experiences** for that café. Admins can disable employee access and revoke sessions. Menus, photo galleries, plans, packages and events support drafts/publication. See [the partner team guide](../../../backend/docs/partner-team-and-content.md) for permissions and APIs.
+
+For a standalone partner APK, follow [the Android build guide](../../../docs/android-builds.md). Run `npm run build:apk` from this directory after linking its own EAS project and configuring the API URL.
+
 Uses Expo SDK 58, matching the dating app. Use Expo Go for SDK 58. After upgrading, stop the old Metro server and restart with `npx expo start --clear`.
 
 This is a separate Expo application from the dating-user app at `frontend/`.
@@ -61,3 +65,5 @@ Never expose the OTP in API responses in production.
 3. Request and verify the OTP.
 
 Dating-user and platform-user accounts are rejected by this app after verification.
+
+The header bell receives live date requests and cancellations for partner admins. Tapping an update opens Requests. See [notification setup](../../../backend/docs/notifications.md) to enable phone push in an installed build.
