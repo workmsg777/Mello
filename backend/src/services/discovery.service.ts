@@ -1,24 +1,28 @@
 import { randomUUID } from 'node:crypto';
 import { type Transaction } from 'sequelize';
 import { sequelize } from '../config/database';
-import { datingProfileConfig } from '../config/datingProfile';
 import Errors from '../errors';
 import {
-  eligibleProfilesSql,
-  mutualLikesSql,
   rows,
+  DiscoveryRepository,
+  type MatchRow,
 } from '../repositories/discovery.repository';
+import {
+  createFeedSession,
+  sessionExists,
+  markPageServed,
+  recordImpressions,
+} from '../repositories/matching.repository';
+import { DatingCatalogService } from './dating/dating-catalog.service';
 import { DatingStateService } from './dating/dating-state.service';
-import { demoCompatibility, nextPlanStatus } from './discovery.rules';
+import { nextPlanStatus } from './discovery.rules';
+import { MatchingService } from './matching/matching.service';
+import { RANKING_VERSION } from './matching/scoring';
+import type { FeedCycle, PairRanking } from '../types/matching';
 import { NotificationService } from '../notifications/notification.service';
 import { NotificationKind } from '../notifications/types';
+import { matchingConfig } from '../config/matching';
 
-interface MatchRow {
-  id: string;
-  user_low: string;
-  user_high: string;
-  created_at: string;
-}
 interface PlanRow {
   id: string;
   creatorUserId: string;
@@ -28,130 +32,196 @@ interface PlanRow {
   partnerId: string;
 }
 export class DiscoveryService {
+  private readonly catalog = new DatingCatalogService();
   private readonly state = new DatingStateService();
+  private readonly matching = new MatchingService();
+  private readonly repository = new DiscoveryRepository();
+
+  async impressions(userId: string, sessionId: string, targets: string[]) {
+    const count = await recordImpressions(userId, sessionId, [
+      ...new Set(targets),
+    ]);
+    if (count === null)
+      throw new Errors.NotFoundError('Discovery session not found');
+    return count;
+  }
 
   async assertReady(userId: string): Promise<void> {
-    const [profile] = await rows(
-      `SELECT p.user_id FROM user_profiles p JOIN user_onboarding_progress o ON o.user_id=p.user_id WHERE p.user_id=:userId AND p.profile_status='ACTIVE' AND p.deleted_at IS NULL AND o.status='COMPLETED'`,
-      { userId },
-    );
+    const [profile] = await this.repository.ready(userId);
     if (!profile)
       throw new Errors.ForbiddenError(
         'Complete your profile before discovering people',
       );
   }
 
-  private async card(viewerId: string, userId: string) {
-    const preview = await this.state.getPreview(userId);
+  private async card(
+    viewerId: string,
+    userId: string,
+    provided?: PairRanking,
+    catalog?: ReturnType<DatingCatalogService['get']>,
+  ) {
+    const preview = await this.state.getPreview(userId, catalog);
+    const rank =
+      provided ??
+      (await this.matching.rank(viewerId, [userId])).rankings.get(userId)!;
+    const { effectiveScore: _internal, ...ranking } = rank;
     return {
       userId,
       ...preview,
+      ranking,
       compatibility: {
-        percentage: demoCompatibility(viewerId, userId),
-        isDemo: true,
-        label: 'Demo compatibility',
+        percentage: ranking.score,
+        isDemo: false,
+        label:
+          ranking.score === null
+            ? 'More profile information needed'
+            : 'Profile alignment',
       },
     };
+  }
+
+  private cards(
+    viewerId: string,
+    ids: string[],
+    rankings: ReadonlyMap<string, PairRanking>,
+  ) {
+    if (!ids.length) return [];
+    const catalog = this.catalog.get();
+    return Promise.all(
+      ids.map((id) => this.card(viewerId, id, rankings.get(id), catalog)),
+    );
   }
 
   async feed(
     userId: string,
     limit: number,
     offset: number,
-    cycle: {
-      shuffleSeed?: string | undefined;
-      after?: string | undefined;
-    } = {},
+    cycle: FeedCycle = {},
   ) {
-    const replacements = {
-      userId,
-      minimumPhotos: datingProfileConfig.minimumPhotos,
-      limit: limit + 1,
-      offset,
-    };
-    const available = `${eligibleProfilesSql}
-      AND NOT EXISTS (SELECT 1 FROM matches m WHERE ((m.user_low=:userId AND m.user_high=u.id) OR (m.user_high=:userId AND m.user_low=u.id)) AND ${mutualLikesSql})`;
-    const fresh = await rows<{ userId: string }>(
-      `SELECT u.id AS "userId" ${available}
-       AND NOT EXISTS (SELECT 1 FROM discovery_actions d WHERE d.actor_id=:userId AND d.target_id=u.id AND d.source='USER')
-       ORDER BY (p.current_city_id = me.current_city_id) DESC,p.created_at DESC,u.id LIMIT :limit OFFSET :offset`,
-      replacements,
-    );
-    if (fresh.length || offset > 0)
-      return {
-        profiles: await Promise.all(
-          fresh
-            .slice(0, limit)
-            .map((person) => this.card(userId, person.userId)),
+    if (cycle.feedSessionId) {
+      if (!(await sessionExists(userId, cycle.feedSessionId)))
+        throw new Errors.NotFoundError(
+          'Discovery session expired. Refresh Discover.',
+        );
+      // Freeze IDs/order, never eligibility, consent, text, or public explanations.
+      const remaining = await this.repository.sessionPage(
+        userId,
+        cycle.feedSessionId,
+        cycle.cursor ?? -1,
+        limit + 1,
+      );
+      const page = remaining.slice(0, limit);
+      const ranked = await this.matching.rank(
+        userId,
+        page.map((p) => p.userId),
+        new Set(
+          page
+            .filter((p) => p.servedVersion?.startsWith('HYBRID:'))
+            .map((p) => p.userId),
         ),
-        nextOffset: fresh.length > limit ? offset + limit : null,
+      );
+      await markPageServed(cycle.feedSessionId, ranked.rankings);
+      return {
+        profiles: await this.cards(
+          userId,
+          page.map((p) => p.userId),
+          ranked.rankings,
+        ),
+        nextOffset: null,
         feedMode: 'FRESH' as const,
         shuffleSeed: null,
         nextCursor: null,
-        compatibilityMode: 'DEMO',
+        feedSessionId: cycle.feedSessionId,
+        nextRankCursor:
+          remaining.length > limit ? page[page.length - 1]!.position : null,
+        needsApprovedPhotos:
+          !page.length &&
+          !(await this.repository.hasApprovedPublicPhotos(userId)),
+        compatibilityMode: 'PROFILE_ALIGNMENT',
       };
-    // Once fresh profiles are exhausted, revisit passes in a stable shuffled round.
-    // Seeded ordering plus a cursor avoids skipping/repeating people between batches.
+    }
+    const fresh = await this.repository.fresh(userId);
+    if (fresh.length || offset > 0) {
+      // Complete eligible pool is scored before selecting the first page.
+      const ranked = await this.matching.rank(
+        userId,
+        fresh.map((p) => p.userId),
+      );
+      const page = ranked.ids.slice(offset, offset + limit);
+      const feedSessionId = await createFeedSession(
+        userId,
+        ranked.ids,
+        `${matchingConfig.modeFor(userId)}:${RANKING_VERSION}`,
+        ranked.rankings,
+        page,
+      );
+      return {
+        profiles: await this.cards(userId, page, ranked.rankings),
+        nextOffset: ranked.ids.length > offset + limit ? offset + limit : null,
+        feedMode: 'FRESH' as const,
+        shuffleSeed: null,
+        nextCursor: null,
+        feedSessionId,
+        nextRankCursor:
+          ranked.ids.length > offset + limit ? offset + page.length - 1 : null,
+        needsApprovedPhotos:
+          !page.length &&
+          !(await this.repository.hasApprovedPublicPhotos(userId)),
+        compatibilityMode: 'PROFILE_ALIGNMENT',
+      };
+    }
+    // Passed profiles get another chance in stable seeded rounds; never recycle likes.
     let seed = cycle.shuffleSeed ?? randomUUID();
-    const passed = `SELECT u.id AS "userId" ${available}
-      AND EXISTS (SELECT 1 FROM discovery_actions d WHERE d.actor_id=:userId AND d.target_id=u.id AND d.action='PASS' AND d.source='USER')
-      AND NOT EXISTS (SELECT 1 FROM discovery_actions d WHERE d.actor_id=:userId AND d.target_id=u.id AND d.action='LIKE' AND d.source='USER')
-      AND (:after IS NULL OR (md5(CAST(u.id AS text) || :seed),u.id) > (md5(CAST(:after AS text) || :seed),CAST(:after AS uuid)))
-      ORDER BY md5(CAST(u.id AS text) || :seed),u.id LIMIT :limit`;
-    let candidates = await rows<{ userId: string }>(passed, {
-      ...replacements,
+    let candidates = await this.repository.passed(
+      userId,
       seed,
-      after: cycle.after ?? null,
-    });
+      cycle.after ?? null,
+      limit + 1,
+    );
     if (!candidates.length && cycle.after) {
       seed = randomUUID();
-      candidates = await rows<{ userId: string }>(passed, {
-        ...replacements,
-        seed,
-        after: null,
-      });
+      candidates = await this.repository.passed(userId, seed, null, limit + 1);
     }
+    const page = candidates.slice(0, limit);
+    const ranked = await this.matching.rank(
+      userId,
+      page.map((p) => p.userId),
+    );
     return {
-      profiles: await Promise.all(
-        candidates
-          .slice(0, limit)
-          .map((person) => this.card(userId, person.userId)),
+      profiles: await this.cards(
+        userId,
+        page.map((p) => p.userId),
+        ranked.rankings,
       ),
       nextOffset: null,
       feedMode: 'RECYCLED' as const,
       shuffleSeed: seed,
       nextCursor:
         candidates.length > limit ? candidates[limit - 1]!.userId : null,
-      compatibilityMode: 'DEMO',
+      feedSessionId: null,
+      nextRankCursor: null,
+      needsApprovedPhotos:
+        !page.length &&
+        !(await this.repository.hasApprovedPublicPhotos(userId)),
+      compatibilityMode: 'PROFILE_ALIGNMENT',
     };
   }
 
   async incomingLikes(userId: string, limit: number, offset: number) {
-    const pendingSql = `${eligibleProfilesSql}
-      AND EXISTS (SELECT 1 FROM discovery_actions incoming WHERE incoming.actor_id=u.id AND incoming.target_id=:userId AND incoming.action='LIKE' AND incoming.source='USER')
-      AND NOT EXISTS (SELECT 1 FROM discovery_actions mine WHERE mine.actor_id=:userId AND mine.target_id=u.id AND mine.source='USER')`;
-    const replacements = {
+    const { people, total } = await this.repository.incoming(
       userId,
-      minimumPhotos: datingProfileConfig.minimumPhotos,
       limit,
       offset,
-    };
-    const [people, counts] = await Promise.all([
-      rows<{ userId: string; likedAt: string }>(
-        `SELECT u.id AS "userId",(SELECT created_at FROM discovery_actions d WHERE d.actor_id=u.id AND d.target_id=:userId) AS "likedAt" ${pendingSql} ORDER BY "likedAt" DESC,u.id LIMIT :limit OFFSET :offset`,
-        replacements,
-      ),
-      rows<{ total: number }>(
-        `SELECT count(*)::int AS total ${pendingSql}`,
-        replacements,
-      ),
-    ]);
-    const total = counts[0]!.total;
+    );
+    const ranked = await this.matching.rank(
+      userId,
+      people.map((p) => p.userId),
+    );
     return {
       profiles: await Promise.all(
-        people.map(async (person) => ({
-          ...(await this.card(userId, person.userId)),
-          likedAt: person.likedAt,
+        people.map(async (p) => ({
+          ...(await this.card(userId, p.userId, ranked.rankings.get(p.userId))),
+          likedAt: p.likedAt,
         })),
       ),
       total,
@@ -160,26 +230,43 @@ export class DiscoveryService {
     };
   }
 
+  async exclude(userId: string, targetId: string, reportReason?: string) {
+    if (userId === targetId)
+      throw new Errors.BadRequestError('Choose another profile');
+    return sequelize.transaction(async (transaction) => {
+      const users = await this.repository.lockPair(
+        userId,
+        targetId,
+        transaction,
+      );
+      if (users.length !== 2)
+        throw new Errors.NotFoundError('Profile unavailable');
+      const inserted = await this.repository.exclude(
+        userId,
+        targetId,
+        transaction,
+        reportReason ?? null,
+      );
+      return inserted.length > 0;
+    });
+  }
+
   async act(userId: string, targetId: string, action: 'LIKE' | 'PASS') {
     if (userId === targetId)
       throw new Errors.BadRequestError('You cannot like your own profile');
     return sequelize.transaction(async (transaction) => {
-      // Ordered row locks serialize simultaneous reciprocal likes without deadlocks.
-      await rows(
-        'SELECT id FROM users WHERE id IN (:userId,:targetId) ORDER BY id FOR UPDATE',
-        { userId, targetId },
-        transaction,
-      );
-      const [eligible] = await rows(
-        `SELECT u.id ${eligibleProfilesSql} AND u.id=:targetId`,
-        { userId, targetId, minimumPhotos: datingProfileConfig.minimumPhotos },
+      // Same lock order serializes reciprocal likes across API instances.
+      await this.repository.lockPair(userId, targetId, transaction);
+      const [eligible] = await this.repository.eligible(
+        userId,
+        targetId,
         transaction,
       );
       if (!eligible)
         throw new Errors.NotFoundError('This profile is no longer available');
-      const [prior] = await rows<{ action: string; source: string }>(
-        'SELECT action,source FROM discovery_actions WHERE actor_id=:userId AND target_id=:targetId',
-        { userId, targetId },
+      const [prior] = await this.repository.priorAction(
+        userId,
+        targetId,
         transaction,
       );
       if (
@@ -190,15 +277,11 @@ export class DiscoveryService {
         throw new Errors.ConflictError(
           'You have already responded to this profile',
         );
-      await rows(
-        `INSERT INTO discovery_actions (actor_id,target_id,action,source) VALUES (:userId,:targetId,:action,'USER') ON CONFLICT (actor_id,target_id) DO UPDATE SET action=EXCLUDED.action,source='USER',created_at=now() WHERE discovery_actions.source='DEMO' OR discovery_actions.action='PASS' RETURNING actor_id`,
-        { userId, targetId, action },
-        transaction,
-      );
+      await this.repository.saveAction(userId, targetId, action, transaction);
       if (action === 'PASS') return { matched: false, matchId: null };
-      const [reciprocal] = await rows(
-        "SELECT actor_id FROM discovery_actions WHERE actor_id=:targetId AND target_id=:userId AND action='LIKE' AND source='USER'",
-        { userId, targetId },
+      const [reciprocal] = await this.repository.reciprocalLike(
+        userId,
+        targetId,
         transaction,
       );
       if (!reciprocal) {
@@ -217,9 +300,10 @@ export class DiscoveryService {
         return { matched: false, matchId: null };
       }
       const [low, high] = [userId, targetId].sort();
-      const [match] = await rows<{ id: string }>(
-        `INSERT INTO matches (id,user_low,user_high) VALUES (:id,:low,:high) ON CONFLICT (user_low,user_high) DO UPDATE SET user_low=EXCLUDED.user_low RETURNING id`,
-        { id: randomUUID(), low, high },
+      const [match] = await this.repository.createMatch(
+        randomUUID(),
+        low!,
+        high!,
         transaction,
       );
       await new NotificationService().users(
@@ -228,7 +312,7 @@ export class DiscoveryService {
           key: `match:${match!.id}`,
           kind: NotificationKind.MATCH,
           category: 'matches',
-          title: 'It’s a mutual spark',
+          title: 'It is a mutual spark',
           body: 'You liked each other. Say a little hello.',
           data: { matchId: match!.id },
         },
@@ -243,24 +327,27 @@ export class DiscoveryService {
     matchId: string,
     transaction?: Transaction,
   ): Promise<MatchRow> {
-    const [match] = await rows<MatchRow>(
-      `SELECT m.* FROM matches m
-      JOIN users u1 ON u1.id=m.user_low AND u1.deleted_at IS NULL JOIN users u2 ON u2.id=m.user_high AND u2.deleted_at IS NULL
-      JOIN accounts a1 ON a1.id=u1.account_id AND a1.status='ACTIVE' AND a1.deleted_at IS NULL
-      JOIN accounts a2 ON a2.id=u2.account_id AND a2.status='ACTIVE' AND a2.deleted_at IS NULL
-      WHERE m.id=:matchId AND :userId IN (m.user_low,m.user_high) AND ${mutualLikesSql}`,
-      { userId, matchId },
-      transaction,
-    );
+    const [match] = await this.repository.match(userId, matchId, transaction);
     if (!match) throw new Errors.NotFoundError('Match not found');
     return match;
   }
 
+  async feedback(userId: string, matchId: string, worthwhile: boolean) {
+    await sequelize.transaction(async (transaction) => {
+      await this.assertMatch(userId, matchId, transaction);
+      await rows(
+        `INSERT INTO match_feedback(match_id,user_id,worthwhile) VALUES (:matchId,:userId,:worthwhile)
+        ON CONFLICT(match_id,user_id) DO UPDATE SET worthwhile=EXCLUDED.worthwhile,updated_at=now() RETURNING match_id`,
+        { matchId, userId, worthwhile },
+        transaction,
+      );
+    });
+  }
   async matches(userId: string) {
-    const matches = await rows<MatchRow>(
-      `SELECT m.* FROM matches m WHERE :userId IN (user_low,user_high) AND ${mutualLikesSql} ORDER BY created_at DESC LIMIT 100`,
-      { userId },
-    );
+    const matches = await this.repository.matches(userId);
+    const other = (match: MatchRow) =>
+      match.user_low === userId ? match.user_high : match.user_low;
+    const ranked = await this.matching.rank(userId, matches.map(other));
     const visible = await Promise.all(
       matches.map(async (match) => {
         try {
@@ -270,7 +357,8 @@ export class DiscoveryService {
             createdAt: match.created_at,
             person: await this.card(
               userId,
-              match.user_low === userId ? match.user_high : match.user_low,
+              other(match),
+              ranked.rankings.get(other(match)),
             ),
           };
         } catch (error) {

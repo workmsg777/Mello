@@ -37,10 +37,15 @@ services:
 
   backend:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: backend/Dockerfile
+      args:
+        WITH_EMBEDDINGS: ${AI_EMBEDDINGS_ENABLED:-false}
+        PHOTO_MODERATION_MODE: ${PHOTO_MODERATION_MODE:-off}
     container_name: mello_backend
+    init: true
     restart: unless-stopped
+    stop_grace_period: 60s
     env_file:
       - .env
     environment:
@@ -52,7 +57,13 @@ services:
       DB_USER: dating_user
       DB_PASSWORD: dating_password
       REDIS_URL: redis://redis:6379
-    command: ['sh', '-c', 'npm run db:migrate && npm run db:seed && npm start']
+      MATCHING_AI_KEY: ${MATCHING_AI_KEY:-}
+      AI_EMBEDDINGS_ENABLED: ${AI_EMBEDDINGS_ENABLED:-false}
+      AI_MODEL_LOCAL_ONLY: ${AI_MODEL_LOCAL_ONLY:-true}
+      AI_MODEL_REVISION: ${AI_MODEL_REVISION:-e8f8c211226b894fcb81acc59f3b34ba3efd5f42}
+      AI_EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
+      AI_MODEL_CACHE_DIR: /home/appuser/.cache/huggingface/hub
+      AI_PHOTO_MODEL_PATH: /opt/vision/marqo.onnx
     depends_on:
       postgres:
         condition: service_healthy
@@ -61,13 +72,21 @@ services:
     ports:
       - '${PORT:-4000}:${PORT:-4000}'
     volumes:
+      - ./src:/app/src:ro
+      - ./database:/app/database:ro
+      - ./scripts:/app/scripts:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
       - mello_uploads:/app/uploads
+      - matching_model_cache:/home/appuser/.cache/huggingface
+      - ../ai/.cache/vision:/opt/vision:ro
 
   notification-worker:
     profiles: ['workers']
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: backend/Dockerfile
+      target: backend
+    init: true
     restart: unless-stopped
     stop_grace_period: 60s
     env_file:
@@ -80,7 +99,13 @@ services:
       DB_USER: dating_user
       DB_PASSWORD: dating_password
       REDIS_URL: redis://redis:6379
-    command: ['node', 'dist/notifications/main.js']
+    command:
+      - ./node_modules/.bin/nodemon
+      - --legacy-watch
+      - src/notifications/main.ts
+    volumes:
+      - ./src:/app/src:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
     depends_on:
       backend:
         condition: service_started
@@ -90,5 +115,6 @@ services:
         condition: service_healthy
 
 volumes:
+  matching_model_cache:
   dating_postgres_data:
   mello_uploads:

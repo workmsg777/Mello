@@ -46,3 +46,7 @@ Connect to the API origin with `socket.io-client`, `transports: ['websocket']` a
 `npm test` uses isolated PostgreSQL and real WebSocket clients to check authorization, live delivery, typing, read receipts, reconnect history, retries, pagination and the send limit. The frontend supports web and Android bundles. `/preview` has a clearly labelled local-only chat design preview and does not fabricate replies from people.
 
 This milestone implements one-to-one text chat. Attachments, push notifications, reporting/moderation, blocking/unmatching, deletion and end-to-end encryption are separate work; the message store is server-readable. Physical-device testing and multi-instance load testing are required before public release.
+
+## Optional conversation starters
+
+`POST /api/chat/:matchId/icebreakers` returns grounded draft suggestions from shared public interests, with local fallback when the internal assist service is unavailable. It enforces the same explicit mutual-match authorization as messages and never inserts/sends a message. The app lets the user choose a draft, edit it and press Send. Route/controller/service/repository boundaries are documented in [the matching guide](matching.md).

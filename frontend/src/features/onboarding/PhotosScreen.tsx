@@ -65,7 +65,7 @@ export function PhotosScreen() {
   return (
     <OnboardingShell
       title="Add your best photos."
-      subtitle={`Choose ${catalog.rules.minimumPhotos}–${catalog.rules.maximumPhotos}. Your first photo is your cover.`}
+      subtitle={`Choose ${catalog.rules.minimumPhotos}–${catalog.rules.maximumPhotos}. Your profile appears in discovery once ${catalog.rules.minimumPhotos} photos are approved.`}
       progress={progress("PHOTOS")}
       footer={
         <PrimaryButton
@@ -80,18 +80,45 @@ export function PhotosScreen() {
         {photos.map((photo, index) => (
           <View key={photo.id} style={styles.photoCard}>
             {photo.url ? (
-              <ProfilePhoto url={photo.url} style={styles.image} />
+              <ProfilePhoto
+                url={photo.url}
+                ownerPhotoId={
+                  photo.url.startsWith("/uploads/profile-photos/")
+                    ? photo.id
+                    : undefined
+                }
+                style={styles.image}
+              />
             ) : (
               <View style={styles.image} />
             )}
+            <Text>
+              {photo.moderationStatus === "PENDING"
+                ? "Awaiting review"
+                : photo.moderationStatus === "REJECTED"
+                  ? "Replace this photo"
+                  : "Approved"}
+            </Text>
             {photo.isPrimary ? (
               <Text style={styles.primary}>PRIMARY</Text>
             ) : null}
             <View style={styles.actions}>
-              <Pressable onPress={() => move(index, -1)}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Move photo ${index + 1} earlier`}
+                disabled={busy || index === 0}
+                onPress={() => move(index, -1)}
+              >
                 <Text style={styles.action}>←</Text>
               </Pressable>
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  photo.isPrimary
+                    ? `Photo ${index + 1} is primary`
+                    : `Make photo ${index + 1} primary`
+                }
+                disabled={busy || photo.isPrimary}
                 onPress={() =>
                   void run(() =>
                     datingApi.reorderPhotos(
@@ -103,10 +130,18 @@ export function PhotosScreen() {
               >
                 <Text style={styles.action}>★</Text>
               </Pressable>
-              <Pressable onPress={() => move(index, 1)}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Move photo ${index + 1} later`}
+                disabled={busy || index === photos.length - 1}
+                onPress={() => move(index, 1)}
+              >
                 <Text style={styles.action}>→</Text>
               </Pressable>
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Remove photo ${index + 1}`}
+                disabled={busy}
                 onPress={() => void run(() => datingApi.deletePhoto(photo.id))}
               >
                 <Text style={[styles.action, { color: colors.danger }]}>×</Text>
@@ -115,6 +150,14 @@ export function PhotosScreen() {
           </View>
         ))}
       </View>
+      {photos.some((photo) => photo.moderationStatus === "PENDING") && (
+        <PrimaryButton
+          kind="ghost"
+          label="Refresh review status"
+          disabled={busy}
+          onPress={() => void run(async () => undefined)}
+        />
+      )}
       {photos.length < catalog.rules.maximumPhotos ? (
         <PrimaryButton
           kind="secondary"

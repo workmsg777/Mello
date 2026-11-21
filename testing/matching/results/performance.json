@@ -1,0 +1,14 @@
+{
+  "samples": 5,
+  "population": 10000,
+  "latenciesMs": [
+    3647,
+    3080,
+    3815,
+    4259,
+    3099
+  ],
+  "p50Ms": 3647,
+  "p95Ms": 4259,
+  "scope": "Sequential localhost smoke; not concurrent production load"
+}

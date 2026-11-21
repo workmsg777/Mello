@@ -13,6 +13,7 @@ import {
 import {
   ActivityIndicator,
   Animated,
+  AppState,
   Image,
   Modal,
   PanResponder,
@@ -29,10 +30,23 @@ import {
 import { ProfilePhoto } from "../../components/ProfilePhoto";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { absoluteMediaUrl, getApiErrorMessage } from "../../config/api";
-import { ErrorNotice, Field, PrimaryButton } from "../../components/ui";
-import { discoveryApi } from "../../services/discovery.service";
+import {
+  ChoiceChip,
+  ErrorNotice,
+  Field,
+  LoadingScreen,
+  PrimaryButton,
+} from "../../components/ui";
+import {
+  discoveryApi,
+  type ReportReason,
+} from "../../services/discovery.service";
 import { useAppDispatch, useAppSelector } from "../../store";
-import { clearDatingData } from "../../store/datingSlice";
+import {
+  clearDatingData,
+  loadDatingData,
+  refreshDatingState,
+} from "../../store/datingSlice";
 import { signOut } from "../../store/sessionSlice";
 import { colors } from "../../theme";
 import type {
@@ -49,6 +63,13 @@ import { ChatInbox } from "../chat/ChatInbox";
 import { useChat } from "../chat/useChat";
 import { LikesInbox } from "./LikesInbox";
 import { VenueContent } from "./VenueContent";
+import { PersonalizationControls } from "./PersonalizationControls";
+import {
+  alignmentExplanation,
+  alignmentLabel,
+  alignmentScore,
+} from "./alignment";
+import { photoReviewStatus } from "../../utils/photo-review";
 import { NotificationCenter } from "../notifications/NotificationCenter";
 import type { AppNotification } from "../notifications/useNotifications";
 
@@ -190,6 +211,8 @@ function PersonCard({
     }),
   ).current;
   const uri = absoluteMediaUrl(person.photos[photo]?.url ?? null);
+  const score = alignmentScore(person);
+  const scoreLabel = person.compatibility.isDemo ? "Demo match" : "Alignment";
   return (
     <View style={s.cardWrap}>
       <Animated.View
@@ -233,22 +256,39 @@ function PersonCard({
             style={StyleSheet.absoluteFill}
           />
           <View style={s.cardTop}>
-            <View style={s.intentPill}>
-              <Ionicons name="flower-outline" size={13} color="white" />
-              <Text style={s.intentText}>Here for something real</Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              onPress={onDetails}
-              accessibilityLabel="About this compatibility score"
-              style={s.compatibility}
-            >
-              <Text style={s.percent}>
-                {person.compatibility.percentage}
-                <Text style={{ fontSize: 15 }}>%</Text>
-              </Text>
-              <Text style={s.percentLabel}>DEMO MATCH</Text>
-            </Pressable>
+            {person.ranking?.reasons[0] ? (
+              <View style={s.intentPill}>
+                <Ionicons name="flower-outline" size={13} color="white" />
+                <Text numberOfLines={2} style={s.intentText}>
+                  {person.ranking.reasons[0]}
+                </Text>
+              </View>
+            ) : (
+              <View />
+            )}
+            {score !== null ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={onDetails}
+                accessibilityLabel={`${score}% ${scoreLabel.toLowerCase()}. View details.`}
+                style={s.compatibility}
+              >
+                <Text style={s.percent}>
+                  {score}
+                  <Text style={{ fontSize: 15 }}>%</Text>
+                </Text>
+                <Text style={s.percentLabel}>{scoreLabel.toUpperCase()}</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                onPress={onDetails}
+                style={s.intentPill}
+              >
+                <Ionicons name="sparkles-outline" size={13} color="white" />
+                <Text style={s.intentText}>Alignment unavailable</Text>
+              </Pressable>
+            )}
           </View>
           {person.photos.length > 1 ? (
             <View style={s.photoControls}>
@@ -350,7 +390,17 @@ function PersonCard({
 export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
   const dispatch = useAppDispatch();
   const session = useAppSelector((x) => x.session);
-  const dating = useAppSelector((x) => x.dating.state);
+  const {
+    state: dating,
+    status: datingStatus,
+    catalog,
+    error: datingError,
+  } = useAppSelector((x) => x.dating);
+  const canDiscover =
+    session.status === "authenticated" &&
+    dating?.onboarding.progress?.status === "COMPLETED";
+  const minimumPhotos = catalog?.rules.minimumPhotos ?? 3;
+  const photoStatus = photoReviewStatus(dating, minimumPhotos);
   const wide = useWindowDimensions().width >= 900;
   const scrollRef = useRef<ScrollViewInstance>(null);
   const [tab, setTab] = useState<Tab>("discover");
@@ -366,12 +416,24 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
   const deckRef = useRef(profiles);
   deckRef.current = profiles;
   const feedVersion = useRef(0);
-  const feedCycle = useRef<{ shuffleSeed?: string; after?: string }>({});
+  const loadVersion = useRef(0);
+  const matchesVersion = useRef(0);
+  const feedCycle = useRef<{
+    shuffleSeed?: string;
+    after?: string;
+    feedSessionId?: string;
+    cursor?: number;
+  }>({});
+  const [impressionSession, setImpressionSession] = useState<string | null>(
+    null,
+  );
   const demoPassed = useRef<DiscoveryCard[]>([]);
   const demoLiked = useRef(
     new Set(demoMatches.map((match) => match.person.userId)),
   );
   const [feedLoading, setFeedLoading] = useState(false);
+  const [feedError, setFeedError] = useState<string | null>(null);
+  const [needsApprovedPhotos, setNeedsApprovedPhotos] = useState(false);
   const [feedMode, setFeedMode] = useState<"FRESH" | "RECYCLED">("FRESH");
   const [matches, setMatches] = useState<Match[]>(demo ? [...demoMatches] : []);
   const [incomingLikes, setIncomingLikes] = useState<IncomingLike[]>(
@@ -380,7 +442,9 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
   const [likesTotal, setLikesTotal] = useState(demo ? 1 : 0);
   const [likesNext, setLikesNext] = useState<number | null>(null);
   const [venues, setVenues] = useState<Venue[]>(demo ? [...demoVenues] : []);
-  const [city, setCity] = useState(demo ? "Bengaluru" : "Your city");
+  const city = demo
+    ? "Bengaluru"
+    : (dating?.profile?.currentCity?.name ?? "Your city");
   const [plans, setPlans] = useState<DatePlan[]>([]);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(
     demo ? demoMatches[0]! : null,
@@ -406,11 +470,16 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
   const applyFeed = useCallback((feed: DiscoveryFeed) => {
     deckRef.current = feed.profiles;
     setProfiles(feed.profiles);
+    setFeedError(null);
+    setNeedsApprovedPhotos(feed.needsApprovedPhotos ?? false);
     setFeedMode(feed.feedMode);
+    setImpressionSession(feed.feedSessionId ?? null);
     feedCycle.current =
-      feed.shuffleSeed && feed.nextCursor
-        ? { shuffleSeed: feed.shuffleSeed, after: feed.nextCursor }
-        : {};
+      feed.feedSessionId && feed.nextRankCursor != null
+        ? { feedSessionId: feed.feedSessionId, cursor: feed.nextRankCursor }
+        : feed.shuffleSeed && feed.nextCursor
+          ? { shuffleSeed: feed.shuffleSeed, after: feed.nextCursor }
+          : {};
   }, []);
   const refillFeed = useCallback(async () => {
     if (demo) {
@@ -432,42 +501,74 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
       const feed = await discoveryApi.feed(feedCycle.current);
       if (request === feedVersion.current) applyFeed(feed);
     } catch (caught) {
-      if (request === feedVersion.current) setError(getApiErrorMessage(caught));
+      if (request === feedVersion.current)
+        setFeedError(getApiErrorMessage(caught));
     } finally {
       if (request === feedVersion.current) setFeedLoading(false);
     }
   }, [demo, applyFeed]);
+  const refreshMatches = useCallback(async () => {
+    if (demo || !canDiscover) return;
+    const request = ++matchesVersion.current;
+    try {
+      const sparks = await discoveryApi.matches();
+      if (request !== matchesVersion.current) return;
+      setMatches(sparks);
+      setActiveChatId((current) =>
+        sparks.some((match) => match.id === current) ? current : null,
+      );
+      setSelectedMatch(
+        sparks.find((match) => match.id === selectedMatchRef.current?.id) ??
+          sparks[0] ??
+          null,
+      );
+    } catch (caught) {
+      if (request === matchesVersion.current)
+        setError(`Couldn't load matches. ${getApiErrorMessage(caught)}`);
+    }
+  }, [demo, canDiscover]);
   const load = useCallback(async () => {
-    if (demo || session.status !== "authenticated") return;
+    if (demo || !canDiscover) return;
     setLoading(true);
     setError(null);
     const request = ++feedVersion.current;
-    try {
-      const [feed, sparks, likedYou] = await Promise.all([
-        discoveryApi.feed(),
-        discoveryApi.matches(),
-        discoveryApi.likes(),
-      ]);
-      if (request === feedVersion.current) {
-        applyFeed(feed);
-        setFeedLoading(false);
-      }
-      setMatches(sparks);
-      setIncomingLikes(likedYou.profiles);
-      setLikesTotal(likedYou.total);
-      setLikesNext(likedYou.nextOffset);
-      const selection =
-        sparks.find((x) => x.id === selectedMatchRef.current?.id) ??
-        sparks[0] ??
-        null;
-      setSelectedMatch(selection);
-    } catch (e) {
-      setError(getApiErrorMessage(e));
-    } finally {
-      setLoading(false);
+    const loadRequest = ++loadVersion.current;
+    const [feed, likesResult] = await Promise.allSettled([
+      discoveryApi.feed(),
+      discoveryApi.likes(),
+      refreshMatches(),
+    ]);
+    if (request === feedVersion.current) {
+      if (feed.status === "fulfilled") applyFeed(feed.value);
+      else setFeedError(getApiErrorMessage(feed.reason));
+      setFeedLoading(false);
     }
-  }, [demo, session.status, applyFeed]);
-  const chat = useChat(userId, demo, () => void load());
+    if (loadRequest !== loadVersion.current) return;
+    if (likesResult.status === "fulfilled") {
+      setIncomingLikes(likesResult.value.profiles);
+      setLikesTotal(likesResult.value.total);
+      setLikesNext(likesResult.value.nextOffset);
+    } else {
+      setError(
+        `Couldn't load likes. ${getApiErrorMessage(likesResult.reason)}`,
+      );
+    }
+    setLoading(false);
+  }, [demo, canDiscover, applyFeed, refreshMatches]);
+  const chat = useChat(
+    userId,
+    demo,
+    () => void load(),
+    () => {
+      setDetail(null);
+      setCelebration(null);
+      void load();
+    },
+  );
+  useEffect(() => {
+    if (!demo && session.status === "authenticated" && datingStatus === "idle")
+      void dispatch(loadDatingData());
+  }, [demo, session.status, datingStatus, dispatch]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -477,7 +578,6 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
       .venues()
       .then((nearby) => {
         setVenues(nearby.venues);
-        setCity(nearby.city ?? "Your city");
       })
       .catch((caught) => setError(getApiErrorMessage(caught)));
   }, [demo, tab]);
@@ -502,6 +602,39 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
     const timer = setTimeout(() => setNotice(null), 4000);
     return () => clearTimeout(timer);
   }, [notice]);
+  useEffect(() => {
+    const target = profiles[0]?.userId;
+    if (demo || loading || tab !== "discover" || !impressionSession || !target)
+      return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let reported = false;
+    const visible = () =>
+      AppState.currentState === "active" &&
+      (typeof document === "undefined" ||
+        document.visibilityState === "visible");
+    // Require an uninterrupted foreground interval; resume tracking after returning.
+    const trackVisibility = () => {
+      clearTimeout(timer);
+      if (reported || !visible()) return;
+      timer = setTimeout(() => {
+        if (!visible()) return;
+        reported = true;
+        void discoveryApi
+          .impression(impressionSession, target)
+          .catch(() => undefined);
+      }, 700);
+    };
+    const subscription = AppState.addEventListener("change", trackVisibility);
+    if (typeof document !== "undefined")
+      document.addEventListener("visibilitychange", trackVisibility);
+    trackVisibility();
+    return () => {
+      clearTimeout(timer);
+      subscription.remove();
+      if (typeof document !== "undefined")
+        document.removeEventListener("visibilitychange", trackVisibility);
+    };
+  }, [demo, loading, tab, impressionSession, profiles[0]?.userId]);
   const respond = async (action: "LIKE" | "PASS", target?: DiscoveryCard) => {
     const person = target ?? profiles[0];
     if (!person || busy) return;
@@ -673,16 +806,78 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
       setBusy(false);
     }
   };
+  const current = profiles[0];
+  const detailMatch = matches.find((m) => m.person.userId === detail?.userId);
+  const [feedbackSent, setFeedbackSent] = useState<string | null>(null);
+  const saveFeedback = async (worthwhile: boolean) => {
+    if (!detailMatch || busy) return;
+    setBusy(true);
+    setHideError(null);
+    try {
+      await discoveryApi.feedback(detailMatch.id, worthwhile);
+      setFeedbackSent(detailMatch.id);
+    } catch (error) {
+      setHideError(getApiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const [reportReason, setReportReason] = useState<ReportReason | undefined>();
+  const [confirmHide, setConfirmHide] = useState<string | null>(null);
+  const [hideError, setHideError] = useState<string | null>(null);
+  useEffect(() => {
+    setConfirmHide(null);
+    setReportReason(undefined);
+    setHideError(null);
+  }, [detail?.userId]);
   if (!demo && session.status === "anonymous") return <Redirect href="/auth" />;
   if (!demo && dating && dating.onboarding.progress?.status !== "COMPLETED")
     return <Redirect href="/" />;
-  const current = profiles[0];
+  if (!demo && datingStatus === "error")
+    return (
+      <Empty
+        icon="refresh-outline"
+        title="Couldn’t load your profile"
+        copy={datingError ?? "Please try again."}
+        action="Try again"
+        onPress={() => void dispatch(loadDatingData())}
+      />
+    );
+  if (!demo && !canDiscover) return <LoadingScreen />;
+  const hideProfile = async () => {
+    if (!detail || busy) return;
+    const id = detail.userId;
+    setBusy(true);
+    setHideError(null);
+    try {
+      await discoveryApi.exclude(id, reportReason);
+      setProfiles((current) => current.filter((p) => p.userId !== id));
+      setIncomingLikes((current) => current.filter((p) => p.userId !== id));
+      setMatches((current) => current.filter((m) => m.person.userId !== id));
+      if (selectedMatch?.person.userId === id) {
+        setSelectedMatch(null);
+        setActiveChatId(null);
+        setPlans([]);
+      }
+      setDetail(null);
+      await load();
+    } catch (error) {
+      setHideError(getApiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
   const myName = demo ? "Sahil" : (dating?.profile?.displayName ?? "you");
-  const myPhoto = demo ? null : dating?.photos.find((x) => x.isPrimary)?.url;
+  const myPhoto = demo
+    ? null
+    : dating?.photos.find(
+        (x) => x.isPrimary && x.moderationStatus === "APPROVED",
+      )?.url;
   const selectTab = (value: Tab) => {
     setTab(value);
     setError(null);
     scrollRef.current?.scrollTo({ y: 0, animated: false });
+    if (value === "sparks") void refreshMatches();
   };
   const onNotification = async (item: AppNotification) => {
     try {
@@ -711,7 +906,6 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
         selectTab("dates");
         const nearby = await discoveryApi.venues();
         setVenues(nearby.venues);
-        setCity(nearby.city ?? "Your city");
         const place = nearby.venues.find(
           (entry) => entry.id === item.data.venueId,
         );
@@ -932,6 +1126,7 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
           {!loading && tab === "discover" ? (
             <View style={[s.discoveryLayout, wide && s.discoveryWide]}>
               <View style={s.feedColumn}>
+                {!demo && <PersonalizationControls onChanged={load} />}
                 <View style={s.sectionRow}>
                   <View style={s.row}>
                     <View style={s.liveDot} />
@@ -945,6 +1140,7 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
                     {feedMode === "RECYCLED" ? "RESHUFFLED" : "FOR YOU"}
                   </Text>
                 </View>
+                <ErrorNotice message={feedError} />
                 {current ? (
                   <PersonCard
                     person={current}
@@ -960,11 +1156,47 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
                       Finding your next little possibility…
                     </Text>
                   </View>
+                ) : feedError ? (
+                  <PrimaryButton
+                    kind="ghost"
+                    label="Retry Discover"
+                    onPress={() => void load()}
+                  />
+                ) : needsApprovedPhotos ? (
+                  <>
+                    <Empty
+                      icon="images-outline"
+                      title={
+                        photoStatus.awaitingReview
+                          ? "Your photos are awaiting review"
+                          : "Check your profile photos"
+                      }
+                      copy={`You have ${photoStatus.approved} of ${minimumPhotos} approved public photos.${photoStatus.awaitingReview ? ` ${photoStatus.pending} awaiting review.` : ""} Discover opens when you reach ${minimumPhotos}.`}
+                      action="Manage photos"
+                      onPress={() => router.push("/onboarding/photos")}
+                    />
+                    <PrimaryButton
+                      kind="ghost"
+                      label="Refresh photo status"
+                      onPress={() => {
+                        void dispatch(refreshDatingState())
+                          .unwrap()
+                          .then(load)
+                          .catch((error) =>
+                            setFeedError(getApiErrorMessage(error)),
+                          );
+                      }}
+                    />
+                  </>
                 ) : (
                   <Empty
                     icon="moon-outline"
                     title="A little pause, not the end."
-                    copy="No eligible profiles left to show. People you've already liked stay out of this feed."
+                    copy={
+                      demo
+                        ? "No sample profiles are available right now."
+                        : "No eligible profiles are available right now. Review your age range, distance and who you'd like to meet under Profile."
+                    }
                     action={
                       demo
                         ? "Shuffle available sample profiles"
@@ -994,8 +1226,9 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
                   </Text>
                   <View style={s.noteDivider} />
                   <Text style={s.scoreNote}>
-                    Compatibility percentages are a visual preview. Your real
-                    connection is yours to discover.
+                    {demo
+                      ? "The sample profiles show illustrative scores."
+                      : "Profile alignment estimates how much you have in common based on available answers."}
                   </Text>
                 </View>
                 <Pressable
@@ -1053,6 +1286,7 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
                   setActiveChatId(match?.id ?? null);
                   if (match) setSelectedMatch(match);
                 }}
+                onProfile={(match) => setDetail(match.person)}
                 onPlan={(match) => {
                   setSelectedMatch(match);
                   selectTab("dates");
@@ -1320,6 +1554,7 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
                     kind="secondary"
                     onPress={() => router.push("/onboarding/basic-profile")}
                   />
+                  <PersonalizationControls onChanged={load} />
                   <PrimaryButton
                     label="Sign out"
                     kind="ghost"
@@ -1377,15 +1612,18 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
                   <View style={s.scoreBox}>
                     <Ionicons name="sparkles" size={24} color={colors.coral} />
                     <View style={{ flex: 1 }}>
-                      <Text style={s.scoreTitle}>
-                        {detail.compatibility.percentage}% demo compatibility
-                      </Text>
-                      <Text style={s.copy}>
-                        A preview of how compatibility will look. This score is
-                        illustrative; our matching algorithm is still to come.
-                      </Text>
+                      <Text style={s.scoreTitle}>{alignmentLabel(detail)}</Text>
+                      <Text style={s.copy}>{alignmentExplanation(detail)}</Text>
+                      {detail.ranking?.reasons.map((reason) => (
+                        <Text key={reason} style={s.copy}>
+                          {reason}
+                        </Text>
+                      ))}
                     </View>
                   </View>
+                  {detail.profile.jobTitle ? (
+                    <Text style={s.copy}>{detail.profile.jobTitle}</Text>
+                  ) : null}
                   <Text style={s.bio}>
                     {detail.profile.bio || "A little mystery, for now."}
                   </Text>
@@ -1405,6 +1643,99 @@ export function DiscoveryExperience({ demo = false }: { demo?: boolean }) {
                       <Text style={s.bio}>{x.label}</Text>
                     </View>
                   ))}
+                  {!demo && detailMatch && (
+                    <View style={{ gap: 8 }}>
+                      {feedbackSent === detailMatch.id ? (
+                        <Text style={s.copy}>Thanks for your feedback.</Text>
+                      ) : (
+                        <>
+                          <Text style={s.copy}>
+                            Was this introduction worthwhile? Your response is
+                            private and optional.
+                          </Text>
+                          <View style={s.row}>
+                            <PrimaryButton
+                              kind="secondary"
+                              label="Yes"
+                              disabled={busy}
+                              onPress={() => void saveFeedback(true)}
+                            />
+                            <PrimaryButton
+                              kind="ghost"
+                              label="No"
+                              disabled={busy}
+                              onPress={() => void saveFeedback(false)}
+                            />
+                          </View>
+                        </>
+                      )}
+                    </View>
+                  )}
+                  {!demo && (
+                    <>
+                      {confirmHide === detail.userId && (
+                        <View style={{ gap: 8 }}>
+                          <Text style={s.copy}>
+                            You will disappear from each other’s discovery,
+                            likes, matches and chat. This is permanent.
+                          </Text>
+                          <Text style={s.copy}>
+                            Optionally report a safety concern
+                          </Text>
+                          <View
+                            style={{ flexDirection: "row", flexWrap: "wrap" }}
+                          >
+                            {(
+                              [
+                                ["SPAM", "Spam"],
+                                ["IMPERSONATION", "Impersonation"],
+                                ["HARASSMENT", "Harassment"],
+                                ["OTHER_SAFETY", "Other safety concern"],
+                              ] as const
+                            ).map(([value, label]) => (
+                              <ChoiceChip
+                                key={value}
+                                selected={reportReason === value}
+                                label={label}
+                                onPress={() =>
+                                  setReportReason((current) =>
+                                    current === value ? undefined : value,
+                                  )
+                                }
+                              />
+                            ))}
+                          </View>
+                        </View>
+                      )}
+                      <PrimaryButton
+                        kind="secondary"
+                        label={
+                          confirmHide === detail.userId
+                            ? reportReason
+                              ? "Report and permanently hide"
+                              : "Confirm permanent hide"
+                            : "Hide this person permanently"
+                        }
+                        loading={busy}
+                        onPress={() =>
+                          confirmHide === detail.userId
+                            ? void hideProfile()
+                            : setConfirmHide(detail.userId)
+                        }
+                      />
+                      {confirmHide === detail.userId && (
+                        <PrimaryButton
+                          kind="ghost"
+                          label="Cancel"
+                          onPress={() => {
+                            setConfirmHide(null);
+                            setReportReason(undefined);
+                          }}
+                        />
+                      )}
+                      {hideError && <Text style={s.copy}>{hideError}</Text>}
+                    </>
+                  )}
                   {detail.prompts.map((x) => (
                     <View key={x.promptId} style={s.prompt}>
                       <Text style={s.noteKicker}>{x.promptText}</Text>

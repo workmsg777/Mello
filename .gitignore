@@ -29,6 +29,10 @@ ios/Pods/
 .parcel-cache/
 .turbo/
 *.tsbuildinfo
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
 
 # Logs
 logs/

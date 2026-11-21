@@ -8,6 +8,11 @@ import type {
 } from "../types/chat";
 
 export const chatApi = {
+  async icebreakers(matchId: string) {
+    return (
+      await api.post<{ suggestions: string[] }>(`/chat/${matchId}/icebreakers`)
+    ).data.suggestions;
+  },
   async conversations() {
     return (await api.get<ConversationSummary[]>("/chat/conversations")).data;
   },

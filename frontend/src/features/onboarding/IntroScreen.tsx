@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { Link, router } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
 import {
   ErrorNotice,
@@ -10,8 +10,24 @@ import { colors, radii } from "../../theme";
 import { stepByCode } from "../../utils/onboarding";
 import { useOnboarding } from "./useOnboarding";
 
+function publishedPolicy(url: string | undefined): url is `https://${string}` {
+  return url?.startsWith("https://") === true;
+}
+
 export function IntroScreen() {
   const { catalog, state, busy, error, run } = useOnboarding();
+  const termsUrl = process.env.EXPO_PUBLIC_MELLO_TERMS_URL?.trim();
+  const privacyUrl = process.env.EXPO_PUBLIC_MELLO_PRIVACY_URL?.trim();
+  const terms = publishedPolicy(termsUrl)
+    ? termsUrl
+    : __DEV__
+      ? "/terms"
+      : null;
+  const privacy = publishedPolicy(privacyUrl)
+    ? privacyUrl
+    : __DEV__
+      ? "/privacy"
+      : null;
   const begin = () =>
     run(async () => {
       for (const code of catalog.consent.requiredCodes)
@@ -32,6 +48,22 @@ export function IntroScreen() {
           precise location are never shown on your public profile.
         </Text>
       </View>
+      {terms || privacy ? (
+        <View style={styles.links}>
+          {terms ? (
+            <Link href={terms} style={styles.link}>
+              {terms === "/terms" ? "Local test terms" : "Terms of Service"}
+            </Link>
+          ) : null}
+          {privacy ? (
+            <Link href={privacy} style={styles.link}>
+              {privacy === "/privacy"
+                ? "Local test privacy notice"
+                : "Privacy Policy"}
+            </Link>
+          ) : null}
+        </View>
+      ) : null}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Save as you go</Text>
         <Text style={styles.cardText}>
@@ -71,4 +103,10 @@ const styles = StyleSheet.create({
     marginBottom: 7,
   },
   cardText: { color: colors.muted, fontSize: 14, lineHeight: 21 },
+  links: { flexDirection: "row", flexWrap: "wrap", gap: 16 },
+  link: {
+    color: colors.plum,
+    textDecorationLine: "underline",
+    fontWeight: "700",
+  },
 });

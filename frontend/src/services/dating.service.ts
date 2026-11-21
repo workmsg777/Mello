@@ -10,6 +10,11 @@ import type {
   VisibilityMode,
 } from "../types/dating";
 
+export type IntentionSettings = {
+  visibility: VisibilityMode;
+  strength: "OPEN" | "PREFER" | "REQUIRE";
+  partnerOptionIds: string[];
+};
 export const datingApi = {
   async catalog() {
     return (await api.get<DatingCatalog>("/dating/catalog")).data;
@@ -28,9 +33,14 @@ export const datingApi = {
   async profile(body: Record<string, unknown>) {
     return (await api.put("/dating/profile", body)).data;
   },
-  async profileOptions(categoryId: string, optionIds: string[]) {
+  async profileOptions(
+    categoryId: string,
+    optionIds: string[],
+    intentionSettings?: IntentionSettings,
+  ) {
     return (
       await api.put(`/dating/profile-options/${categoryId}`, {
+        intentionSettings,
         selections: optionIds.map((optionId, displayOrder) => ({
           optionId,
           displayOrder,

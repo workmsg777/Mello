@@ -17,6 +17,7 @@ export class UserProfile extends Model {
   declare schoolName: string | null;
   declare currentCityId: string | null;
   declare hometownCityId: string | null;
+  declare preferSharedIntention: boolean;
   declare bioModerationStatus:
     'PENDING' | 'APPROVED' | 'REJECTED' | 'NOT_REVIEWED';
   declare profileStatus: 'DRAFT' | 'ACTIVE' | 'PAUSED';
@@ -74,6 +75,12 @@ export class UserProfile extends Model {
           type: DataTypes.UUID,
           allowNull: true,
           field: 'hometown_city_id',
+        },
+        preferSharedIntention: {
+          type: DataTypes.BOOLEAN,
+          allowNull: false,
+          defaultValue: true,
+          field: 'prefer_shared_intention',
         },
         bioModerationStatus: {
           type: DataTypes.ENUM(

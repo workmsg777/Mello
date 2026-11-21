@@ -60,7 +60,7 @@ const categoryDefinitions = [
     false,
     true,
     true,
-    false,
+    true,
     true,
     40,
   ],

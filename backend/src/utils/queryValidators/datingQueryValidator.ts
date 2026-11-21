@@ -35,7 +35,19 @@ const profileSchema = z.object({
   hometownCityId: uuid.nullable().optional(),
 });
 
+const intentionSettingsSchema = z
+  .object({
+    visibility: z.enum(['PROFILE', 'MATCHING_ONLY', 'PRIVATE']),
+    strength: z.enum(['OPEN', 'PREFER', 'REQUIRE']),
+    partnerOptionIds: z.array(uuid).max(50),
+  })
+  .refine(
+    (s) => s.strength !== 'REQUIRE' || s.partnerOptionIds.length > 0,
+    'Choose an acceptable partner goal',
+  );
+export type IntentionSettings = z.infer<typeof intentionSettingsSchema>;
 const profileOptionSelectionsSchema = z.object({
+  intentionSettings: intentionSettingsSchema.optional(),
   selections: z
     .array(
       z.object({

@@ -37,7 +37,11 @@ export function IdentityScreen() {
       await datingApi.profileOptions(category.id, selected[category.id] ?? []);
     await Promise.all(
       categories
-        .filter((c) => c.allowProfileVisibility)
+        .filter(
+          (c) =>
+            c.allowProfileVisibility &&
+            !state.visibility.some((v) => v.fieldCode === c.code),
+        )
         .map((c) =>
           datingApi.visibility(
             c.code,

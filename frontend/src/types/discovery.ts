@@ -1,7 +1,15 @@
 import type { ProfilePreview } from "./dating";
 export interface DiscoveryCard extends ProfilePreview {
   userId: string;
-  compatibility: { percentage: number; isDemo: boolean; label: string };
+  compatibility: { percentage: number | null; isDemo: boolean; label: string };
+  ranking?: {
+    score: number | null;
+    scoreUnavailable?: "PERSONALIZATION_REQUIRED" | "INSUFFICIENT_PROFILE_DATA" | "UNAVAILABLE";
+    coverage: number;
+    mode: "BASELINE" | "RULES" | "HYBRID";
+    version: string;
+    reasons: string[];
+  };
 }
 export interface Match {
   id: string;
@@ -17,6 +25,9 @@ export interface DiscoveryFeed {
   feedMode: "FRESH" | "RECYCLED";
   shuffleSeed: string | null;
   nextCursor: string | null;
+  feedSessionId?: string | null;
+  nextRankCursor?: number | null;
+  needsApprovedPhotos?: boolean;
 }
 export type VenueKind = "CAFE" | "RESTAURANT" | "ACTIVITY";
 export interface Venue {

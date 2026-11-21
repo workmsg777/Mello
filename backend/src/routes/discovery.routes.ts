@@ -1,14 +1,22 @@
-import { Router, type RequestHandler } from 'express';
+import { publishChat } from '../realtime/chat-events';
+import { Router } from 'express';
 import { z, type ZodType } from 'zod';
 import Errors from '../errors';
 import { authenticate } from '../middleware/authenticate';
 import { requireDatingUser } from '../middleware/requireDatingUser';
 import { DiscoveryService } from '../services/discovery.service';
 import { PartnerService } from '../services/partner.service';
-import { publishChat } from '../realtime/chat-events';
 import { partnerCatalog } from '../constants/partner';
 import { partnerContentRouter } from './partner-content.routes';
 import { PartnerContentService } from '../services/partner-content.service';
+import { requireDiscoveryReady } from '../middleware/requireDiscoveryReady';
+import {
+  getDiscoveryFeed,
+  saveDiscoveryImpressions,
+  saveDiscoveryAction,
+  getIncomingLikes,
+  getDiscoveryMatches,
+} from '../controllers/discovery.controller';
 
 function parse<T>(schema: ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
@@ -26,59 +34,42 @@ const id = z
   .string()
   .uuid()
   .transform((value) => value.toLowerCase());
-const ready: RequestHandler = async (req, _res, next) => {
-  await service.assertReady(req.datingUserId!);
-  next();
-};
 export const discoveryRouter = Router();
-discoveryRouter.use(authenticate, requireDatingUser, ready);
-discoveryRouter.get('/feed', async (req, res) => {
-  const q = parse(
-    z.object({
-      limit: z.coerce.number().int().min(1).max(20).default(10),
-      offset: z.coerce.number().int().min(0).max(10000).default(0),
-      shuffleSeed: z.string().uuid().optional(),
-      after: z.string().uuid().optional(),
-    }),
-    req.query,
+discoveryRouter.use(authenticate, requireDatingUser);
+discoveryRouter.put('/exclusions/:targetId', async (req, res) => {
+  const targetId = parse(id, req.params.targetId);
+  const { reportReason } = parse(
+    z
+      .object({
+        reportReason: z
+          .enum(['SPAM', 'IMPERSONATION', 'HARASSMENT', 'OTHER_SAFETY'])
+          .optional(),
+      })
+      .strict(),
+    req.body ?? {},
   );
-  if (q.after && !q.shuffleSeed)
-    throw new Errors.BadRequestError(
-      'A shuffle seed is required with a discovery cursor',
-    );
-  res.json(await service.feed(req.datingUserId!, q.limit, q.offset, q));
+  if (await service.exclude(req.datingUserId!, targetId, reportReason))
+    publishChat([req.datingUserId!, targetId], 'discovery:refresh', {});
+  res.json({ success: true });
 });
-discoveryRouter.post('/actions', async (req, res) => {
-  const input = parse(
-    z.object({ targetId: id, action: z.enum(['LIKE', 'PASS']) }),
+discoveryRouter.use(requireDiscoveryReady);
+discoveryRouter.get('/feed', getDiscoveryFeed);
+discoveryRouter.post('/impressions', saveDiscoveryImpressions);
+discoveryRouter.post('/actions', saveDiscoveryAction);
+discoveryRouter.get('/likes', getIncomingLikes);
+discoveryRouter.get('/matches', getDiscoveryMatches);
+
+discoveryRouter.put('/matches/:matchId/feedback', async (req, res) => {
+  const { worthwhile } = parse(
+    z.object({ worthwhile: z.boolean() }).strict(),
     req.body,
   );
-  const result = await service.act(
+  await service.feedback(
     req.datingUserId!,
-    input.targetId,
-    input.action,
+    parse(id, req.params.matchId),
+    worthwhile,
   );
-  if (result.matched)
-    publishChat([req.datingUserId!, input.targetId], 'chat:matched', {
-      matchId: result.matchId,
-    });
-  else if (input.action === 'LIKE')
-    publishChat([input.targetId], 'discovery:liked', {});
-  res.json(result);
-});
-
-discoveryRouter.get('/likes', async (req, res) => {
-  const q = parse(
-    z.object({
-      limit: z.coerce.number().int().min(1).max(20).default(20),
-      offset: z.coerce.number().int().min(0).max(10000).default(0),
-    }),
-    req.query,
-  );
-  res.json(await service.incomingLikes(req.datingUserId!, q.limit, q.offset));
-});
-discoveryRouter.get('/matches', async (req, res) => {
-  res.json(await service.matches(req.datingUserId!));
+  res.json({ success: true });
 });
 discoveryRouter.get('/venues', async (req, res) => {
   const input = parse(

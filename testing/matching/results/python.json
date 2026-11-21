@@ -1,0 +1,61 @@
+{
+  "at": "2026-11-01T17:47:31.665588+00:00",
+  "tests": [
+    {
+      "name": "test_matching.MatchingApiTests.test_body_limit_and_no_public_openapi",
+      "status": "PASS",
+      "detail": "",
+      "at": "2026-11-01T17:47:31.501450+00:00",
+      "durationMs": 56
+    },
+    {
+      "name": "test_matching.MatchingApiTests.test_cosine_rejects_invalid_provider_outputs",
+      "status": "PASS",
+      "detail": "",
+      "at": "2026-11-01T17:47:31.508324+00:00",
+      "durationMs": 6
+    },
+    {
+      "name": "test_matching.MatchingApiTests.test_icebreakers_are_drafts_from_supplied_facts",
+      "status": "PASS",
+      "detail": "",
+      "at": "2026-11-01T17:47:31.533239+00:00",
+      "durationMs": 25
+    },
+    {
+      "name": "test_matching.MatchingApiTests.test_internal_auth_required",
+      "status": "PASS",
+      "detail": "",
+      "at": "2026-11-01T17:47:31.552218+00:00",
+      "durationMs": 19
+    },
+    {
+      "name": "test_matching.MatchingApiTests.test_missing_secret_fails_closed",
+      "status": "PASS",
+      "detail": "",
+      "at": "2026-11-01T17:47:31.574597+00:00",
+      "durationMs": 21
+    },
+    {
+      "name": "test_matching.MatchingApiTests.test_semantic_batch_is_grounded_bounded_and_not_persistent",
+      "status": "PASS",
+      "detail": "",
+      "at": "2026-11-01T17:47:31.602101+00:00",
+      "durationMs": 28
+    },
+    {
+      "name": "test_matching.MatchingApiTests.test_strict_validation_does_not_echo_private_input",
+      "status": "PASS",
+      "detail": "",
+      "at": "2026-11-01T17:47:31.631310+00:00",
+      "durationMs": 29
+    },
+    {
+      "name": "test_matching.MatchingApiTests.test_unavailable_model_preserves_health_and_assist",
+      "status": "PASS",
+      "detail": "",
+      "at": "2026-11-01T17:47:31.665588+00:00",
+      "durationMs": 34
+    }
+  ]
+}

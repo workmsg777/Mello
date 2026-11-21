@@ -102,11 +102,14 @@ export const saveProfile: RequestHandler = async (req, res) => {
 
 export const saveProfileOptions: RequestHandler = async (req, res) => {
   const { categoryId } = validateCategoryParams(req.params);
-  const { selections } = validateProfileOptionSelections(req.body);
+  const { selections, intentionSettings } = validateProfileOptionSelections(
+    req.body,
+  );
   await profileOptionService.replaceCategory(
     userId(req),
     categoryId,
     selections,
+    intentionSettings,
   );
   res
     .status(200)

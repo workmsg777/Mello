@@ -78,6 +78,7 @@ export interface DatingCatalog {
 }
 
 export interface PrivateProfile {
+  preferSharedIntention?: boolean;
   id: string;
   displayName: string;
   dateOfBirth: string;
@@ -87,6 +88,7 @@ export interface PrivateProfile {
   companyName: string | null;
   schoolName: string | null;
   currentCityId: string | null;
+  currentCity?: City | null;
   hometownCityId: string | null;
   profileStatus: "DRAFT" | "ACTIVE" | "PAUSED";
 }

@@ -37,17 +37,18 @@ export class CityService {
   async getPublic(
     id: string,
     transaction?: Transaction,
-  ): Promise<{
-    id: string;
-    name: string;
-    stateName: string | null;
-    countryCode: string;
-  }> {
+  ) {
+    const city = await this.findPublic(id, transaction);
+    if (!city) throw new Errors.BadRequestError('Selected city is unavailable');
+    return city;
+  }
+
+  async findPublic(id: string, transaction?: Transaction) {
     const city = await this.repository.findOne({
       where: { id, isActive: true },
       ...withTransaction(transaction),
     });
-    if (!city) throw new Errors.BadRequestError('Selected city is unavailable');
+    if (!city) return null;
     return {
       id: city.id,
       name: city.name,

@@ -19,6 +19,8 @@ let db,
   partnerOther;
 let api, query, matchId, venueId, planId, restaurantAccount;
 let chatIo;
+let completeTestProfile;
+let matchingUsers;
 
 before(
   async () => {
@@ -75,6 +77,9 @@ before(
           {
             phone: `+91${phone++}`,
             accountType: type,
+            ...(type === 'PLATFORM_USER'
+              ? { platformUser: { name: 'Test Photo Reviewer' } }
+              : {}),
             ...(type === 'PARTNER_USER'
               ? {
                   partner: {
@@ -167,9 +172,10 @@ before(
             displayOrder: i,
           })),
         });
-        await api(who, 'PUT', `/dating/visibility/${category.code}`, {
-          visibility: category.isSensitive ? 'MATCHING_ONLY' : 'PROFILE',
-        });
+        if (category.code !== 'DATING_INTENTION')
+          await api(who, 'PUT', `/dating/visibility/${category.code}`, {
+            visibility: category.isSensitive ? 'MATCHING_ONLY' : 'PROFILE',
+          });
       }
       await api(who, 'PUT', '/dating/match-preferences', {
         minAge: 18,
@@ -196,7 +202,7 @@ before(
           mediaId: media.id,
           displayOrder: i,
           isPrimary: i === 0,
-          moderationStatus: 'PENDING',
+          moderationStatus: 'APPROVED',
         });
       }
       for (const code of catalog.consent.requiredCodes)
@@ -220,6 +226,7 @@ before(
         onboardingVersion: 1,
       });
     };
+    completeTestProfile = profile;
     await profile(a, 'Alex');
     await profile(b, 'Blair');
     await profile(outsider, 'Casey');
@@ -247,10 +254,12 @@ test('authentication and completed onboarding gate discovery', async () => {
     ),
   );
   const card = feed.profiles[0];
-  assert.equal(card.compatibility.isDemo, true);
-  assert.ok(
-    card.compatibility.percentage >= 72 && card.compatibility.percentage <= 98,
-  );
+  assert.equal(card.compatibility.isDemo, false);
+  assert.equal(card.compatibility.percentage, null);
+  assert.equal(card.ranking.score, null);
+  assert.equal(card.ranking.scoreUnavailable, 'PERSONALIZATION_REQUIRED');
+  assert.equal(card.ranking.mode, 'BASELINE');
+  assert.equal(card.ranking.coverage, 0);
   assert.equal(card.profile.dateOfBirth, undefined);
   assert.equal(card.matchPreferences, undefined);
   assert.ok(
@@ -810,6 +819,13 @@ test('photo ordering remains unique after a middle photo is removed', async () =
   });
   const after = await service.list(a.profile.userId);
   assert.equal(after.length, 3);
+  const pending = after.find((p) => p.moderationStatus === 'PENDING');
+  assert.ok(pending);
+  // Restore the shared discovery fixture after its replacement photo passes review.
+  await query(
+    "UPDATE user_photos SET moderation_status='APPROVED' WHERE id=:id",
+    { id: pending.id },
+  );
   assert.equal(new Set(after.map((x) => x.displayOrder)).size, 3);
 });
 
@@ -844,13 +860,152 @@ test('browser photo upload reaches the authenticated route as a real file', asyn
       path.join(profilePhotoUploadDirectory, filename),
     ),
   );
-  const uploaded = await fetch(new URL(photo.url, base));
+  const publicUrl = new URL(photo.url, base);
+  const ownerUrl = `${base}/dating/photos/${photo.id}/file`;
+  assert.equal((await fetch(publicUrl)).status, 404);
+  assert.equal((await fetch(ownerUrl)).status, 401);
+  assert.equal(
+    (await fetch(ownerUrl, { headers: { Authorization: `Bearer ${b.token}` } }))
+      .status,
+    404,
+  );
+  const uploaded = await fetch(ownerUrl, {
+    headers: { Authorization: `Bearer ${draft.token}` },
+  });
   assert.equal(uploaded.status, 200);
   assert.equal(
     uploaded.headers.get('Cross-Origin-Resource-Policy'),
     'cross-origin',
   );
   assert.deepEqual(Buffer.from(await uploaded.arrayBuffer()), bytes);
+  const reviewer = await restaurantAccount('PLATFORM_USER');
+  const unassigned = await restaurantAccount('PLATFORM_USER');
+  await query('DELETE FROM account_roles WHERE account_id=:accountId', {
+    accountId: unassigned.account.id,
+  });
+  await api(draft, 'GET', '/photo-review', undefined, 403);
+  await api(partner, 'GET', '/photo-review', undefined, 403);
+  await api(unassigned, 'GET', '/photo-review', undefined, 403);
+  await api(null, 'GET', '/photo-review', undefined, 401);
+  const queue = await api(reviewer, 'GET', '/photo-review');
+  assert.ok(queue.photos.some((item) => item.id === photo.id));
+  assert.equal(
+    (
+      await fetch(`${base}/photo-review/${photo.id}/file`, {
+        headers: { Authorization: `Bearer ${reviewer.token}` },
+      })
+    ).status,
+    200,
+  );
+  const {
+    moderateNextPhoto,
+  } = require('../src/services/dating/photo-moderation.ts');
+  const safe = async (key) => {
+    assert.equal(key, `profile-photos/${filename}`);
+    return { kind: 'scored', risk: 0.005, model: 'fixture' };
+  };
+  assert.equal(await moderateNextPhoto('shadow', 0.01, safe), true);
+  const shadow = await api(draft, 'GET', '/dating/photos');
+  assert.equal(
+    shadow.photos.find((p) => p.id === photo.id).moderationStatus,
+    'PENDING',
+  );
+  assert.equal(await moderateNextPhoto('shadow', 0.01, safe), false);
+  const aiKey = 'photo-worker-integration-key-minimum-length';
+  let reviewedBytes;
+  let reviewedKey;
+  let risk = 0.9;
+  const photoAi = require('node:http').createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    reviewedBytes = Buffer.concat(chunks);
+    reviewedKey = req.headers['x-service-key'];
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ kind: 'scored', risk, model: 'fixture' }));
+  });
+  await new Promise((resolve) => photoAi.listen(0, '127.0.0.1', resolve));
+  const oldKey = process.env.MATCHING_AI_KEY;
+  const oldUrl = process.env.MATCHING_AI_URL;
+  process.env.MATCHING_AI_URL = `http://127.0.0.1:${photoAi.address().port}`;
+  process.env.MATCHING_AI_KEY = aiKey;
+  try {
+    assert.equal(await moderateNextPhoto('auto', 0.01), true);
+    assert.equal((await fetch(publicUrl)).status, 404);
+    assert.equal(await moderateNextPhoto('auto', 0.01), false);
+    await query(
+      'UPDATE user_photos SET moderation_assessment=NULL WHERE id=:id',
+      { id: photo.id },
+    );
+    risk = 0.005;
+    assert.equal(await moderateNextPhoto('auto', 0.01), true);
+    assert.equal(reviewedKey, aiKey);
+    assert.deepEqual(reviewedBytes, bytes);
+    await api(
+      reviewer,
+      'PATCH',
+      `/photo-review/${photo.id}`,
+      { status: 'REJECTED' },
+      409,
+    );
+  } finally {
+    if (oldKey === undefined) delete process.env.MATCHING_AI_KEY;
+    else process.env.MATCHING_AI_KEY = oldKey;
+    if (oldUrl === undefined) delete process.env.MATCHING_AI_URL;
+    else process.env.MATCHING_AI_URL = oldUrl;
+    await new Promise((resolve, reject) =>
+      photoAi.close((error) => (error ? reject(error) : resolve())),
+    );
+  }
+  assert.equal((await fetch(publicUrl)).status, 200);
+  // Put the fixture back in the queue to exercise the independent human review path.
+  await query(
+    "UPDATE user_photos SET moderation_status='PENDING' WHERE id=:id",
+    {
+      id: photo.id,
+    },
+  );
+  await api(
+    unassigned,
+    'PATCH',
+    `/photo-review/${photo.id}`,
+    { status: 'APPROVED' },
+    403,
+  );
+  await api(reviewer, 'PATCH', `/photo-review/${photo.id}`, {
+    status: 'REJECTED',
+  });
+  assert.equal((await fetch(publicUrl)).status, 404);
+  await api(reviewer, 'GET', `/photo-review/${photo.id}/file`, undefined, 404);
+  const [recorded] = await query(
+    'SELECT moderation_assessment AS assessment FROM user_photos WHERE id=:id',
+    { id: photo.id },
+  );
+  assert.equal(recorded.assessment.risk, 0.005);
+  assert.equal(recorded.assessment.manualReview.accountId, reviewer.account.id);
+  assert.equal(recorded.assessment.manualReview.status, 'REJECTED');
+  assert.ok(recorded.assessment.manualReview.reviewedAt);
+  await query(
+    "UPDATE user_photos SET moderation_status='PENDING' WHERE id=:id",
+    {
+      id: photo.id,
+    },
+  );
+  await api(reviewer, 'PATCH', `/photo-review/${photo.id}`, {
+    status: 'APPROVED',
+  });
+  assert.equal((await fetch(publicUrl)).status, 200);
+  await api(draft, 'PUT', '/dating/visibility/PHOTOS', {
+    visibility: 'PRIVATE',
+  });
+  assert.equal((await fetch(publicUrl)).status, 404);
+  assert.equal(
+    (
+      await fetch(ownerUrl, {
+        headers: { Authorization: `Bearer ${draft.token}` },
+      })
+    ).status,
+    200,
+  );
   assert.ok(
     (await api(draft, 'GET', '/dating/photos')).photos.some(
       (item) => item.id === photo.id,
@@ -892,6 +1047,11 @@ test('demo seed creates 22 adult profiles with photos and is safe to rerun', asy
     { ids: first.userIds },
   );
   assert.equal(count.total, 22);
+  const [optIns] = await query(
+    "SELECT count(*)::int AS total FROM user_consents WHERE user_id IN (:ids) AND consent_code='PERSONALIZED_MATCHING' AND status='GRANTED'",
+    { ids: first.userIds },
+  );
+  assert.equal(optIns.total, first.total);
   assert.equal(DEMO_PROFILES.filter((x) => x.gender === 'WOMAN').length, 10);
   assert.equal(DEMO_PROFILES.filter((x) => x.orientation === 'GAY').length, 2);
   const image = await fs.readFile(path.join(directory, first.photoFiles[0]));
@@ -901,15 +1061,19 @@ test('demo seed creates 22 adult profiles with photos and is safe to rerun', asy
   const { DiscoveryService } = require('../src/services/discovery.service.ts');
   const service = new DiscoveryService();
   const gayFeed = await service.feed(stableId('user', 'Reyansh'), 20, 0);
-  assert.ok(
-    gayFeed.profiles.some((x) => x.userId === stableId('user', 'Neil')),
+  const demoPair = gayFeed.profiles.find(
+    (x) => x.userId === stableId('user', 'Neil'),
   );
+  assert.ok(demoPair);
+  assert.ok(Number.isInteger(demoPair.ranking.score));
+  assert.equal(demoPair.compatibility.percentage, demoPair.ranking.score);
   const realFeed = await service.feed(a.profile.userId, 20, 0);
   const person = realFeed.profiles.find((x) =>
     first.userIds.includes(x.userId),
   );
   assert.ok(person);
   assert.equal(person.photos.length, 3);
+  assert.equal(person.ranking.score, null);
   const action = await service.act(a.profile.userId, person.userId, 'LIKE');
   assert.equal(action.matched, false);
   assert.equal(action.matchId, null);
@@ -1159,4 +1323,595 @@ test('dating users can browse published cafe offerings and photos but cannot man
     });
   }
   assert.equal((await api(a, 'GET', route)).length, 4);
+});
+
+test('ranking checks consent, scores the full pool and keeps cursor pages stable after actions', async () => {
+  const people = await Promise.all([
+    restaurantAccount(),
+    restaurantAccount(),
+    restaurantAccount(),
+  ]);
+  // Embedded PostgreSQL has one connection: keep onboarding transactions sequential.
+  for (let index = 0; index < people.length; index++)
+    await completeTestProfile(people[index], `Ranking Test ${index}`);
+  matchingUsers = people;
+  const [viewer, best, other] = people;
+  const catalog = await api(viewer, 'GET', '/dating/catalog');
+  for (const who of people)
+    await api(
+      who,
+      'POST',
+      '/dating/consents',
+      {
+        consentCode: 'PERSONALIZED_MATCHING',
+        policyVersion: catalog.consent.policyVersion,
+        status: 'GRANTED',
+      },
+      201,
+    );
+  await api(other, 'PUT', '/dating/interests', {
+    selections: catalog.interests.slice(-3).map((i) => ({ interestId: i.id })),
+  });
+  await query(
+    "UPDATE user_profiles SET created_at='2001-01-01' WHERE user_id=:id",
+    { id: best.profile.userId },
+  );
+  const first = await api(viewer, 'GET', '/discovery/feed?limit=1');
+  assert.equal(first.profiles[0].userId, best.profile.userId);
+  assert.equal(first.profiles[0].ranking.mode, 'RULES');
+  assert.ok(first.profiles[0].ranking.score > 0);
+  assert.ok(first.nextRankCursor !== null);
+  const sessionId = first.feedSessionId;
+  const impression = {
+    feedSessionId: sessionId,
+    targetIds: [best.profile.userId],
+  };
+  assert.equal(
+    (await api(viewer, 'POST', '/discovery/impressions', impression)).recorded,
+    1,
+  );
+  assert.equal(
+    (await api(viewer, 'POST', '/discovery/impressions', impression)).recorded,
+    0,
+  );
+  const [attribution] = await query(
+    'SELECT served_version FROM discovery_impressions WHERE session_id=:sessionId AND target_id=:id',
+    { sessionId, id: best.profile.userId },
+  );
+  assert.equal(attribution.served_version, 'RULES:reciprocal-v2');
+  await api(
+    viewer,
+    'POST',
+    '/discovery/impressions',
+    { feedSessionId: sessionId, targetIds: [other.profile.userId] },
+    404,
+  );
+  await api(other, 'POST', '/discovery/impressions', impression, 404);
+  await api(
+    other,
+    'GET',
+    `/discovery/feed?feedSessionId=${sessionId}&cursor=0`,
+    undefined,
+    404,
+  );
+  await api(viewer, 'POST', '/discovery/actions', {
+    targetId: best.profile.userId,
+    action: 'PASS',
+  });
+  // Profile edits cannot reshuffle already-issued cursor positions.
+  await api(other, 'PUT', '/dating/interests', {
+    selections: catalog.interests
+      .slice(0, 3)
+      .map((i) => ({ interestId: i.id })),
+  });
+  const next = await api(
+    viewer,
+    'GET',
+    `/discovery/feed?limit=1&feedSessionId=${sessionId}&cursor=${first.nextRankCursor}`,
+  );
+  assert.equal(next.profiles[0].userId, other.profile.userId);
+  assert.notEqual(next.profiles[0].userId, best.profile.userId);
+  await api(
+    other,
+    'POST',
+    '/dating/consents',
+    {
+      consentCode: 'PERSONALIZED_MATCHING',
+      policyVersion: catalog.consent.policyVersion,
+      status: 'REVOKED',
+    },
+    201,
+  );
+  const revoked = await api(
+    viewer,
+    'GET',
+    `/discovery/feed?limit=1&feedSessionId=${sessionId}&cursor=${first.nextRankCursor}`,
+  );
+  assert.equal(revoked.profiles[0].ranking.score, null);
+  assert.equal(
+    revoked.profiles[0].ranking.scoreUnavailable,
+    'PERSONALIZATION_REQUIRED',
+  );
+  assert.deepEqual(revoked.profiles[0].ranking.reasons, []);
+  await api(viewer, 'POST', '/discovery/impressions', {
+    feedSessionId: sessionId,
+    targetIds: [other.profile.userId],
+  });
+  const [fallback] = await query(
+    'SELECT served_version FROM discovery_impressions WHERE session_id=:sessionId AND target_id=:id',
+    { sessionId, id: other.profile.userId },
+  );
+  assert.equal(fallback.served_version, 'BASELINE:reciprocal-v2');
+  await query(
+    "UPDATE discovery_feed_sessions SET expires_at=now()-interval '1 minute' WHERE id=:id",
+    { id: sessionId },
+  );
+  await api(
+    viewer,
+    'GET',
+    `/discovery/feed?feedSessionId=${sessionId}&cursor=0`,
+    undefined,
+    404,
+  );
+  await api(viewer, 'GET', '/discovery/feed?cursor=0', undefined, 400);
+});
+
+test('language and partner-value dealbreakers are reciprocal and missing required answers exclude', async () => {
+  const [viewer, , candidate] = matchingUsers;
+  const catalog = await api(viewer, 'GET', '/dating/catalog');
+  const first = catalog.languages[0].id,
+    second = catalog.languages[1].id;
+  const id = candidate.profile.userId;
+  const shown = async (who, target) =>
+    (await api(who, 'GET', '/discovery/feed?limit=20')).profiles.some(
+      (p) => p.userId === target,
+    );
+  await api(viewer, 'PUT', '/dating/languages', {
+    selections: [{ languageId: first }],
+  });
+  await api(candidate, 'PUT', '/dating/languages', {
+    selections: [{ languageId: second }],
+  });
+  await api(candidate, 'PUT', '/dating/language-preferences', {
+    preferences: [{ languageId: second, isDealbreaker: true }],
+  });
+  assert.equal(await shown(viewer, id), false);
+  await api(viewer, 'PUT', '/dating/languages', {
+    selections: [{ languageId: second }],
+  });
+  assert.equal(await shown(viewer, id), true);
+  await api(candidate, 'PUT', '/dating/language-preferences', {
+    preferences: [],
+  });
+  await api(viewer, 'PUT', '/dating/language-preferences', {
+    preferences: [
+      { languageId: first, isDealbreaker: true },
+      { languageId: second, isDealbreaker: true },
+    ],
+  });
+  assert.equal(await shown(viewer, id), true); // Acceptable languages are OR alternatives.
+  await api(viewer, 'PUT', '/dating/language-preferences', { preferences: [] });
+  const valueId = catalog.values[0].id;
+  await api(viewer, 'PUT', '/dating/partner-value-preferences', {
+    preferences: [{ valueId, isDealbreaker: true }],
+  });
+  assert.equal(await shown(viewer, id), false);
+  await api(candidate, 'PUT', '/dating/values', { selections: [{ valueId }] });
+  assert.equal(await shown(viewer, id), true);
+  await api(candidate, 'PUT', '/dating/partner-value-preferences', {
+    preferences: [{ valueId, isDealbreaker: true }],
+  });
+  assert.equal(await shown(viewer, id), false);
+  await api(viewer, 'PUT', '/dating/values', { selections: [{ valueId }] });
+  assert.equal(await shown(viewer, id), true);
+});
+
+test('private/sensitive inputs stay out of ranking projections and openers require explicit mutual likes', async () => {
+  const [viewer, , candidate] = matchingUsers;
+  const {
+    matchingProfiles,
+  } = require('../src/repositories/matching.repository.ts');
+  const catalog = await api(viewer, 'GET', '/dating/catalog');
+  await api(viewer, 'PUT', '/dating/visibility/DATING_INTENTION', {
+    visibility: 'PRIVATE',
+  });
+  const projected = (await matchingProfiles([viewer.profile.userId])).get(
+    viewer.profile.userId,
+  );
+  assert.equal(projected.options.GENDER_IDENTITY, undefined);
+  assert.equal(projected.options.DATING_INTENTION, undefined);
+  assert.equal(projected.dateOfBirth, undefined);
+  assert.equal(projected.phone, undefined);
+  await api(viewer, 'PUT', '/dating/visibility/BIO', { visibility: 'PRIVATE' });
+  await api(viewer, 'PUT', '/dating/visibility/INTERESTS', {
+    visibility: 'PRIVATE',
+  });
+  const privateProjection = (
+    await matchingProfiles([viewer.profile.userId])
+  ).get(viewer.profile.userId);
+  assert.equal(privateProjection.semanticText, '');
+  assert.deepEqual(privateProjection.interests, []);
+  await api(viewer, 'PUT', '/dating/visibility/BIO', { visibility: 'PROFILE' });
+  await api(viewer, 'PUT', '/dating/visibility/INTERESTS', {
+    visibility: 'PROFILE',
+  });
+  await api(viewer, 'PUT', '/dating/visibility/DATING_INTENTION', {
+    visibility: 'PROFILE',
+  });
+  const fake = randomUUID();
+  await api(viewer, 'POST', `/chat/${fake}/icebreakers`, {}, 404);
+  const first = await api(viewer, 'POST', '/discovery/actions', {
+    targetId: candidate.profile.userId,
+    action: 'LIKE',
+  });
+  assert.equal(first.matched, false);
+  const matched = await api(candidate, 'POST', '/discovery/actions', {
+    targetId: viewer.profile.userId,
+    action: 'LIKE',
+  });
+  const openers = await api(
+    viewer,
+    'POST',
+    `/chat/${matched.matchId}/icebreakers`,
+    {},
+  );
+  assert.ok(openers.suggestions.length > 0);
+  assert.equal(openers.source, 'GROUNDED_TEMPLATE');
+  assert.equal(
+    (await api(viewer, 'GET', `/chat/${matched.matchId}/messages`)).messages
+      .length,
+    0,
+  );
+  await api(
+    matchingUsers[1],
+    'POST',
+    `/chat/${matched.matchId}/icebreakers`,
+    {},
+    404,
+  );
+  const report = require('node:fs').readFileSync(
+    path.join(__dirname, '../database/reports/discovery-quality.sql'),
+    'utf8',
+  );
+  assert.ok(Array.isArray(await query(report)));
+  const exposure = require('node:fs').readFileSync(
+    path.join(__dirname, '../database/reports/discovery-exposure.sql'),
+    'utf8',
+  );
+  assert.ok((await query(exposure)).length > 0);
+});
+
+test('onboarding goals reach discovery, private cards omit hidden data, and photos require approval', async () => {
+  const viewer = await restaurantAccount(),
+    peer = await restaurantAccount();
+  for (const person of [viewer, peer])
+    await completeTestProfile(person, 'Goal test');
+  const catalog = await api(viewer, 'GET', '/dating/catalog');
+  const category = catalog.profileOptionCategories.find(
+    (c) => c.code === 'DATING_INTENTION',
+  );
+  const [goal, other] = catalog.profileOptions.filter(
+    (o) => o.categoryId === category.id,
+  );
+  const peerId = peer.profile.userId,
+    viewerId = viewer.profile.userId;
+  const { profile: privateProfile } = await api(peer, 'GET', '/dating/state');
+  assert.equal(privateProfile.currentCity.name, 'Bengaluru');
+  await api(peer, 'PUT', '/dating/profile', {
+    displayName: privateProfile.displayName,
+    dateOfBirth: privateProfile.dateOfBirth,
+    bio: privateProfile.bio,
+    currentCityId: privateProfile.currentCityId,
+    jobTitle: 'Software engineer',
+    companyName: 'Private company',
+  });
+  const options = '/dating/profile-options/' + category.id;
+  const selects = (id) => ({ selections: [{ optionId: id }] });
+  const {
+    matchingProfiles,
+  } = require('../src/repositories/matching.repository.ts');
+  const projected = async () => (await matchingProfiles([peerId])).get(peerId);
+  await api(peer, 'PUT', options, selects(goal.id));
+  assert.deepEqual((await projected()).options.DATING_INTENTION, [goal.id]);
+  assert.equal((await projected()).publicIntentions, false);
+  await api(viewer, 'PUT', options, {
+    ...selects(goal.id),
+    intentionSettings: {
+      visibility: 'PROFILE',
+      strength: 'REQUIRE',
+      partnerOptionIds: [goal.id],
+    },
+  });
+  await api(peer, 'PUT', options, selects(other.id));
+  await api(
+    viewer,
+    'POST',
+    '/discovery/actions',
+    { action: 'LIKE', targetId: peerId },
+    404,
+  );
+  await api(peer, 'PUT', options, {
+    ...selects(goal.id),
+    intentionSettings: {
+      visibility: 'PRIVATE',
+      strength: 'OPEN',
+      partnerOptionIds: [],
+    },
+  });
+  await api(peer, 'PUT', options, selects(goal.id));
+  assert.equal((await projected()).options.DATING_INTENTION, undefined);
+  await api(
+    viewer,
+    'POST',
+    '/discovery/actions',
+    { action: 'LIKE', targetId: peerId },
+    404,
+  );
+  await api(peer, 'PUT', '/dating/visibility/DATING_INTENTION', {
+    visibility: 'MATCHING_ONLY',
+  });
+  await api(peer, 'PUT', '/dating/languages', {
+    selections: [{ languageId: catalog.languages[0].id }],
+  });
+  const prompt = catalog.prompts[0];
+  await api(peer, 'PUT', '/dating/prompt-answers/' + prompt.id, {
+    answerText: 'Personal prompt answer',
+    displayOrder: 0,
+  });
+  for (const [field, visibility] of [
+    ['BIO', 'PRIVATE'],
+    ['INTERESTS', 'MATCHING_ONLY'],
+    ['LANGUAGES', 'PRIVATE'],
+    ['PROMPTS', 'MATCHING_ONLY'],
+  ])
+    await api(peer, 'PUT', '/dating/visibility/' + field, { visibility });
+  await api(peer, 'POST', '/discovery/actions', {
+    action: 'LIKE',
+    targetId: viewerId,
+  });
+  const incoming = async () =>
+    (await api(viewer, 'GET', '/discovery/likes')).profiles.find(
+      (p) => p.userId === peerId,
+    );
+  const card = await incoming();
+  assert.equal(card.profile.bio, null);
+  assert.equal(card.profile.jobTitle, undefined);
+  await api(peer, 'PUT', '/dating/visibility/JOB', { visibility: 'PROFILE' });
+  const publicProfile = (await incoming()).profile;
+  assert.equal(publicProfile.jobTitle, 'Software engineer');
+  assert.equal(publicProfile.companyName, undefined);
+  assert.equal(
+    (await api(peer, 'GET', '/dating/preview')).profile.jobTitle,
+    'Software engineer',
+  );
+  for (const field of ['prompts', 'languages', 'interests'])
+    assert.deepEqual(card[field], []);
+  assert.ok(
+    !card.profileOptions.some((o) => o.categoryCode === 'DATING_INTENTION'),
+  );
+  const photo = card.photos[0].id;
+  for (const status of ['PENDING', 'REJECTED']) {
+    await query(
+      'UPDATE user_photos SET moderation_status=:status WHERE id=:photo',
+      { status, photo },
+    );
+    assert.equal(await incoming(), undefined);
+    const blocked = await api(peer, 'GET', '/discovery/feed');
+    assert.deepEqual(blocked.profiles, []);
+    assert.equal(blocked.needsApprovedPhotos, true);
+    assert.ok(
+      !(await api(peer, 'GET', '/dating/preview')).photos.some(
+        (p) => p.id === photo,
+      ),
+    );
+  }
+  await query(
+    "UPDATE user_photos SET moderation_status='APPROVED' WHERE id=:photo",
+    { photo },
+  );
+  await api(peer, 'PUT', '/dating/visibility/PROMPTS', {
+    visibility: 'PROFILE',
+  });
+  await query(
+    "UPDATE user_prompt_answers SET moderation_status='REJECTED' WHERE user_id=:peerId",
+    { peerId },
+  );
+  assert.deepEqual((await incoming()).prompts, []);
+});
+
+test('hiding is durable, reciprocal, and revokes discovery and match access', async () => {
+  const [viewer, best, peer] = matchingUsers;
+  const viewerId = viewer.profile.userId,
+    peerId = peer.profile.userId,
+    bestId = best.profile.userId;
+  const {
+    DiscoveryRepository,
+  } = require('../src/repositories/discovery.repository.ts');
+  const repo = new DiscoveryRepository();
+  const matches = await api(viewer, 'GET', '/discovery/matches');
+  const match = matches.find((m) => m.person.userId === peerId);
+  assert.ok(match);
+  await api(viewer, 'PUT', '/discovery/matches/' + match.id + '/feedback', {
+    worthwhile: true,
+  });
+  await api(
+    best,
+    'PUT',
+    '/discovery/matches/' + match.id + '/feedback',
+    { worthwhile: true },
+    404,
+  );
+  const session = await api(best, 'GET', '/discovery/feed');
+  await api(viewer, 'PUT', '/discovery/exclusions/' + bestId);
+  const paged = await api(
+    best,
+    'GET',
+    '/discovery/feed?feedSessionId=' + session.feedSessionId,
+  );
+  assert.ok(!paged.profiles.some((p) => p.userId === viewerId));
+  assert.ok(
+    !(await repo.passed(viewerId, randomUUID(), null, 200)).some(
+      (p) => p.userId === bestId,
+    ),
+  );
+  for (let i = 0; i < 2; i++)
+    await api(viewer, 'PUT', '/discovery/exclusions/' + peerId, {
+      reportReason: 'HARASSMENT',
+    });
+  const reports = await query(
+    'SELECT report_reason FROM discovery_exclusions WHERE actor_id=:viewerId AND target_id=:peerId',
+    { viewerId, peerId },
+  );
+  assert.deepEqual(reports, [{ report_reason: 'HARASSMENT' }]);
+  for (const [who, otherId] of [
+    [viewer, peerId],
+    [peer, viewerId],
+  ]) {
+    assert.ok(
+      !(await api(who, 'GET', '/discovery/matches')).some(
+        (m) => m.id === match.id,
+      ),
+    );
+    assert.ok(
+      !(await api(who, 'GET', '/chat/conversations')).some(
+        (m) => m.matchId === match.id,
+      ),
+    );
+    await api(who, 'GET', '/chat/' + match.id + '/messages', undefined, 404);
+    await api(who, 'POST', '/chat/' + match.id + '/icebreakers', {}, 404);
+    await api(
+      who,
+      'POST',
+      '/discovery/actions',
+      { targetId: otherId, action: 'LIKE' },
+      404,
+    );
+  }
+});
+test('outcome report assigns each pair once and bounds two-way conversations by exposure time', async () => {
+  const t = await sequelize.transaction();
+  const params = {
+    left: a.profile.userId,
+    right: b.profile.userId,
+    matchId,
+    first: randomUUID(),
+    second: randomUUID(),
+  };
+  const run = (sql) =>
+    sequelize.query(sql, {
+      replacements: params,
+      transaction: t,
+      type: require('sequelize').QueryTypes.SELECT,
+    });
+  try {
+    await run(`INSERT INTO discovery_feed_sessions(id,user_id,algorithm_version,expires_at)
+      VALUES (:first,:left,'qa-first',now()),(:second,:right,'qa-second',now()) RETURNING id`);
+    await run(
+      `INSERT INTO discovery_feed_items(session_id,target_id,position) VALUES (:first,:right,0),(:second,:left,0) RETURNING position`,
+    );
+    await run(`INSERT INTO discovery_impressions(session_id,user_id,target_id,algorithm_version,served_version,first_seen_at)
+      VALUES (:first,:left,:right,'qa-first','RULES',now()-interval '14 days'),(:second,:right,:left,'qa-second','HYBRID',now()-interval '13 days') RETURNING target_id`);
+    await run(
+      "UPDATE matches SET created_at=now()-interval '13 days' WHERE id=:matchId RETURNING id",
+    );
+    await run(
+      "UPDATE chat_messages SET created_at=now()-interval '12 days' WHERE match_id=:matchId AND sequence=1 RETURNING id",
+    );
+    const [first] = await run(
+      'SELECT sender_id FROM chat_messages WHERE match_id=:matchId AND sequence=1',
+    );
+    params.sender = first.sender_id;
+    const sql = require('node:fs').readFileSync(
+      path.join(__dirname, '../database/reports/discovery-quality.sql'),
+      'utf8',
+    );
+    const result = async () => {
+      const report = await run(sql);
+      assert.ok(!report.some((r) => r.algorithm_version === 'qa-second'));
+      return report.find((r) => r.algorithm_version === 'qa-first');
+    };
+    assert.equal(
+      Number((await result()).two_way_conversations_within_7_days),
+      0,
+    );
+    await run(
+      "UPDATE chat_messages SET created_at=now()-interval '11 days' WHERE match_id=:matchId AND sender_id<>:sender RETURNING id",
+    );
+    const row = await result();
+    assert.equal(Number(row.exposed_pairs), 1);
+    assert.equal(Number(row.two_way_conversations_per_exposed_pair), 1);
+  } finally {
+    await t.rollback();
+  }
+});
+
+test('hybrid service calls are consent-gated and merge semantic evidence without changing mutual-match rules', async () => {
+  const [viewer, , candidate] = matchingUsers;
+  const {
+    MatchingService,
+  } = require('../src/services/matching/matching.service.ts');
+  const catalog = await api(viewer, 'GET', '/dating/catalog');
+  const savedMode = process.env.MATCHING_MODE,
+    savedRollout = process.env.MATCHING_ROLLOUT_PERCENT;
+  let calls = 0;
+  const ranker = new MatchingService({
+    semantic: async (text, batch) => {
+      calls++;
+      assert.equal(typeof text, 'string');
+      assert.deepEqual(Object.keys(batch[0]).sort(), ['key', 'text']);
+      return {
+        version: 'integration-test-encoder',
+        scores: new Map([[candidate.profile.userId, 0.8]]),
+      };
+    },
+  });
+  try {
+    process.env.MATCHING_MODE = 'HYBRID';
+    process.env.MATCHING_ROLLOUT_PERCENT = '100';
+    const denied = await ranker.rank(viewer.profile.userId, [
+      candidate.profile.userId,
+    ]);
+    assert.equal(
+      denied.rankings.get(candidate.profile.userId).mode,
+      'BASELINE',
+    );
+    assert.equal(calls, 0);
+    await api(
+      candidate,
+      'POST',
+      '/dating/consents',
+      {
+        consentCode: 'PERSONALIZED_MATCHING',
+        policyVersion: catalog.consent.policyVersion,
+        status: 'GRANTED',
+      },
+      201,
+    );
+    const allowed = await ranker.rank(viewer.profile.userId, [
+      candidate.profile.userId,
+    ]);
+    assert.equal(allowed.rankings.get(candidate.profile.userId).mode, 'HYBRID');
+    assert.equal(calls, 1);
+    await api(
+      candidate,
+      'POST',
+      '/dating/consents',
+      {
+        consentCode: 'PERSONALIZED_MATCHING',
+        policyVersion: 'outdated-policy',
+        status: 'GRANTED',
+      },
+      201,
+    );
+    const outdated = await ranker.rank(viewer.profile.userId, [
+      candidate.profile.userId,
+    ]);
+    assert.equal(outdated.rankings.get(candidate.profile.userId).score, null);
+    assert.equal(calls, 1);
+  } finally {
+    if (savedMode === undefined) delete process.env.MATCHING_MODE;
+    else process.env.MATCHING_MODE = savedMode;
+    if (savedRollout === undefined) delete process.env.MATCHING_ROLLOUT_PERCENT;
+    else process.env.MATCHING_ROLLOUT_PERCENT = savedRollout;
+  }
 });

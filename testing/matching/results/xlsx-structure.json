@@ -1,0 +1,19 @@
+{
+  "file": "C:\\Users\\u21ec\\Desktop\\mello\\outputs\\01a192d1-2f30-7532-a754-39dbb9ba9e30\\Matching-QA.xlsx",
+  "bytes": 1884592,
+  "sheets": 17,
+  "persistedRosterRows": 10000,
+  "nativeTableCount": 15,
+  "moduleCaseCount": 134,
+  "statusCounts": {
+    "PASS": 107,
+    "FAIL": 1,
+    "BLOCKED": 3,
+    "NOT RUN": 23
+  },
+  "filtersVerified": true,
+  "freezeRowsAndColumnsVerified": 15,
+  "statusDropdownsVerified": true,
+  "cachedSummaryMatchesSource": true,
+  "qaSecretsAbsent": true
+}

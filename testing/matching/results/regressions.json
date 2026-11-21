@@ -1,0 +1,451 @@
+{
+  "at": "2026-11-01T17:45:55.484Z",
+  "typecheck": {
+    "name": "backend-typecheck",
+    "exitCode": 0,
+    "durationMs": 2342,
+    "at": "2026-11-01T17:45:04.548Z",
+    "log": "testing/matching/results/backend-typecheck.log"
+  },
+  "suite": {
+    "name": "backend-tests",
+    "exitCode": 0,
+    "durationMs": 50931,
+    "at": "2026-11-01T17:45:55.483Z",
+    "log": "testing/matching/results/backend-tests.log"
+  },
+  "tests": [
+    {
+      "event": "test:pass",
+      "name": "dating app: physical phone uses the Expo computer instead of localhost",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\api-url.test.cjs",
+      "line": 14,
+      "nesting": 0,
+      "durationMs": 11.757,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "dating app: explicit remote APIs and production configuration are preserved",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\api-url.test.cjs",
+      "line": 26,
+      "nesting": 0,
+      "durationMs": 0.7342,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "dating app: browser uses its own host and respects an explicit URL",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\api-url.test.cjs",
+      "line": 47,
+      "nesting": 0,
+      "durationMs": 0.6595,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "dating app: missing or tunnel metadata does not invent an API tunnel",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\api-url.test.cjs",
+      "line": 73,
+      "nesting": 0,
+      "durationMs": 2.1775,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "partner app: physical phone uses the Expo computer instead of localhost",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\api-url.test.cjs",
+      "line": 14,
+      "nesting": 0,
+      "durationMs": 4.347,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "partner app: explicit remote APIs and production configuration are preserved",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\api-url.test.cjs",
+      "line": 26,
+      "nesting": 0,
+      "durationMs": 0.4003,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "partner app: browser uses its own host and respects an explicit URL",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\api-url.test.cjs",
+      "line": 47,
+      "nesting": 0,
+      "durationMs": 0.7178,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "partner app: missing or tunnel metadata does not invent an API tunnel",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\api-url.test.cjs",
+      "line": 73,
+      "nesting": 0,
+      "durationMs": 3.444,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "reconnect, acknowledgement and broadcast merge without duplicate or downgraded messages",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\chat-state.test.cjs",
+      "line": 9,
+      "nesting": 0,
+      "durationMs": 6.8903,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "message identifiers remain valid and unique without browser randomUUID",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\chat-state.test.cjs",
+      "line": 34,
+      "nesting": 0,
+      "durationMs": 4.8117,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "authentication and completed onboarding gate discovery",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 241,
+      "nesting": 0,
+      "durationMs": 24339.8287,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "discovery honors reciprocal gender and age preferences and active account status",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 263,
+      "nesting": 0,
+      "durationMs": 671.7356,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "likes create one mutual match, are idempotent, and disappear from discovery",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 322,
+      "nesting": 0,
+      "durationMs": 1006.8461,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "one-sided likes appear in Liked you; a stale match row cannot grant chat and Pass dismisses a like",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 382,
+      "nesting": 0,
+      "durationMs": 557.3229,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "chat is match-only, persistent, ordered, idempotent and tracks unread/read state",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 431,
+      "nesting": 0,
+      "durationMs": 422.0851,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "real WebSockets deliver messages, typing and read receipts only to participants",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 508,
+      "nesting": 0,
+      "durationMs": 581.8181,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "chat history uses gap-free cursor pages and enforces a cross-transport send limit",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 617,
+      "nesting": 0,
+      "durationMs": 475.5928,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "partners publish cafés, restaurants and activities with ownership enforcement",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 684,
+      "nesting": 0,
+      "durationMs": 167.4476,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "only matched people can propose, accept or cancel dates; only venue owners can confirm",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 726,
+      "nesting": 0,
+      "durationMs": 300.3022,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "invalid dates and identifiers are rejected",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 783,
+      "nesting": 0,
+      "durationMs": 71.2059,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "revoked access sessions cannot call protected routes",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 794,
+      "nesting": 0,
+      "durationMs": 12.6891,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "photo ordering remains unique after a middle photo is removed",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 801,
+      "nesting": 0,
+      "durationMs": 41.7527,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "browser photo upload reaches the authenticated route as a real file",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 819,
+      "nesting": 0,
+      "durationMs": 74.5391,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "demo seed creates 22 adult profiles with photos and is safe to rerun",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 864,
+      "nesting": 0,
+      "durationMs": 9126.3312,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "exhausted discovery reshuffles passes without repeats, respects preferences, and never recycles likes",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 947,
+      "nesting": 0,
+      "durationMs": 5138.2324,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "dating users can browse published cafe offerings and photos but cannot manage content",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 1029,
+      "nesting": 0,
+      "durationMs": 363.112,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "ranking checks consent, scores the full pool and keeps cursor pages stable after actions",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 1167,
+      "nesting": 0,
+      "durationMs": 4073.1283,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "language and partner-value dealbreakers are reciprocal and missing required answers exclude",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 1273,
+      "nesting": 0,
+      "durationMs": 1473.8539,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "private/sensitive inputs stay out of ranking projections and openers require explicit mutual likes",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 1323,
+      "nesting": 0,
+      "durationMs": 275.8044,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "hybrid service calls are consent-gated and merge semantic evidence without changing mutual-match rules",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\discovery.integration.test.cjs",
+      "line": 1393,
+      "nesting": 0,
+      "durationMs": 79.9668,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "AI adapter authenticates, validates responses and falls back on malformed/unavailable services",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\matching-ai-client.test.cjs",
+      "line": 7,
+      "nesting": 0,
+      "durationMs": 330.4841,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "matching uses real overlap, reciprocal preferences and conservative aggregation",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\matching-score.test.cjs",
+      "line": 33,
+      "nesting": 0,
+      "durationMs": 23.7603,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "missing answers stay unknown, not false agreement or disagreement",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\matching-score.test.cjs",
+      "line": 52,
+      "nesting": 0,
+      "durationMs": 1.8988,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "both people need current personalization permission",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\matching-score.test.cjs",
+      "line": 63,
+      "nesting": 0,
+      "durationMs": 0.7194,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "semantic signals are bounded and never create fake baseline scores",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\matching-score.test.cjs",
+      "line": 70,
+      "nesting": 0,
+      "durationMs": 0.7467,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "city-centre distance is finite and symmetric",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\matching-score.test.cjs",
+      "line": 79,
+      "nesting": 0,
+      "durationMs": 1.9851,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "soft age preference affects scoring without claiming missing intentions match",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\matching-score.test.cjs",
+      "line": 87,
+      "nesting": 0,
+      "durationMs": 0.6942,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "rollout is stable, supports a baseline control, and can be disabled without restarting",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\matching-score.test.cjs",
+      "line": 100,
+      "nesting": 0,
+      "durationMs": 55.9394,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "uploaded photos use the reachable API origin on a phone",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\media-url.test.cjs",
+      "line": 5,
+      "nesting": 0,
+      "durationMs": 2.8514,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "CDN and picker image URLs are preserved",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\media-url.test.cjs",
+      "line": 24,
+      "nesting": 0,
+      "durationMs": 3.1431,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "Twilio sends a correctly addressed OTP without making a real SMS request",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\otp-delivery.test.cjs",
+      "line": 26,
+      "nesting": 0,
+      "durationMs": 85.4442,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "SMS failures return a safe retry message",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\otp-delivery.test.cjs",
+      "line": 45,
+      "nesting": 0,
+      "durationMs": 2.7126,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "missing provider credentials fail before any network request",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\otp-delivery.test.cjs",
+      "line": 55,
+      "nesting": 0,
+      "durationMs": 1.6612,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "production cannot use console OTP delivery",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\otp-delivery.test.cjs",
+      "line": 68,
+      "nesting": 0,
+      "durationMs": 1.0534,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "web picker File is sent as bytes rather than an object string",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\photo-form-data.test.cjs",
+      "line": 7,
+      "nesting": 0,
+      "durationMs": 102.9648,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "web URI fallback reads the image and retains its MIME type",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\photo-form-data.test.cjs",
+      "line": 17,
+      "nesting": 0,
+      "durationMs": 20.645,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "native picker retains the React Native URI upload descriptor",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\photo-form-data.test.cjs",
+      "line": 28,
+      "nesting": 0,
+      "durationMs": 6.2576,
+      "error": null
+    },
+    {
+      "event": "test:pass",
+      "name": "empty browser files are rejected before upload",
+      "file": "C:\\Users\\u21ec\\Desktop\\mello\\backend\\tests\\photo-form-data.test.cjs",
+      "line": 53,
+      "nesting": 0,
+      "durationMs": 2.1985,
+      "error": null
+    }
+  ]
+}
