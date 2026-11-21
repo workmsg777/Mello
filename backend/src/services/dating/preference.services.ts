@@ -115,13 +115,14 @@ export class UserProfileOptionPreferenceService {
     userId: string,
     categoryId: string,
     preferences: ProfileOptionPreferenceInput[],
+    outerTransaction?: Transaction,
   ): Promise<void> {
     const optionIds = preferences.map(({ optionId }) => optionId);
     if (new Set(optionIds).size !== optionIds.length)
       throw new Errors.BadRequestError(
         'Duplicate option preferences are not allowed',
       );
-    await sequelize.transaction(async (transaction) => {
+    const persist = async (transaction: Transaction) => {
       const category = await this.categoryService.getActive(
         categoryId,
         transaction,
@@ -158,7 +159,9 @@ export class UserProfileOptionPreferenceService {
         })),
         { transaction },
       );
-    });
+    };
+    if (outerTransaction) await persist(outerTransaction);
+    else await sequelize.transaction(persist);
   }
 
   async list(userId: string) {

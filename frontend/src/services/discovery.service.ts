@@ -9,10 +9,36 @@ import type {
   VenueKind,
   VenueOffering,
 } from "../types/discovery";
+export type ReportReason =
+  "SPAM" | "IMPERSONATION" | "HARASSMENT" | "OTHER_SAFETY";
 export const discoveryApi = {
-  async feed(cycle: { shuffleSeed?: string; after?: string } = {}) {
-    return (await api.get<DiscoveryFeed>("/discovery/feed", { params: cycle }))
-      .data;
+  async feed(
+    cycle: {
+      shuffleSeed?: string;
+      after?: string;
+      feedSessionId?: string;
+      cursor?: number;
+    } = {},
+  ): Promise<DiscoveryFeed> {
+    try {
+      const feed = (
+        await api.get<DiscoveryFeed>("/discovery/feed", { params: cycle })
+      ).data;
+      return cycle.feedSessionId && !feed.profiles.length ? this.feed() : feed;
+    } catch (error) {
+      if (
+        cycle.feedSessionId &&
+        (error as { response?: { status?: number } }).response?.status === 404
+      )
+        return this.feed();
+      throw error;
+    }
+  },
+  async impression(feedSessionId: string, targetId: string) {
+    await api.post("/discovery/impressions", {
+      feedSessionId,
+      targetIds: [targetId],
+    });
   },
   async act(targetId: string, action: "LIKE" | "PASS") {
     return (
@@ -21,6 +47,12 @@ export const discoveryApi = {
         { targetId, action },
       )
     ).data;
+  },
+  async exclude(targetId: string, reportReason?: ReportReason) {
+    await api.put(`/discovery/exclusions/${targetId}`, { reportReason });
+  },
+  async feedback(matchId: string, worthwhile: boolean) {
+    await api.put(`/discovery/matches/${matchId}/feedback`, { worthwhile });
   },
   async matches() {
     return (await api.get<Match[]>("/discovery/matches")).data;

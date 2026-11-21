@@ -132,6 +132,7 @@ async function seedDemoData(db, options = {}) {
     return value.id;
   };
   const fixtureIds = DEMO_PROFILES.map((p) => stableId('user', p.name));
+  const policyVersion = process.env.CONSENT_POLICY_VERSION?.trim() || '1.0';
   await fs.mkdir(directory, { recursive: true });
   const photoFiles = [];
   await db.transaction(async (transaction) => {
@@ -302,11 +303,29 @@ async function seedDemoData(db, options = {}) {
           ...base(`consent:${code}`),
           user_id: userId,
           consent_code: code,
-          policy_version: process.env.CONSENT_POLICY_VERSION || '1.0',
+          policy_version: policyVersion,
           status: 'GRANTED',
           granted_at: now,
           revoked_at: null,
         });
+      // Seed the opt-in for fictional profiles only. Preserve existing choices.
+      await select(
+        `INSERT INTO user_consents
+          (id, user_id, consent_code, policy_version, status, granted_at, created_at, updated_at)
+        SELECT :id, :userId, 'PERSONALIZED_MATCHING', :policyVersion, 'GRANTED', :now, :now, :now
+        WHERE NOT EXISTS (
+          SELECT 1 FROM user_consents
+          WHERE user_id = :userId AND consent_code = 'PERSONALIZED_MATCHING' AND policy_version = :policyVersion
+        )
+        ON CONFLICT (id) DO NOTHING`,
+        {
+          id: stableId(`personalized-matching:${policyVersion}`, person.name),
+          userId,
+          policyVersion,
+          now,
+        },
+        transaction,
+      );
     }
   });
   // Demo profiles never manufacture incoming likes or consent to a match.

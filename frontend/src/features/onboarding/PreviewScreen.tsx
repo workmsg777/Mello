@@ -72,6 +72,7 @@ export function PreviewScreen() {
           {preview.profile.currentCity ? (
             <Text style={styles.city}>{preview.profile.currentCity.name}</Text>
           ) : null}
+          {preview.profile.jobTitle ? <Text style={styles.city}>{preview.profile.jobTitle}</Text> : null}
           {preview.profile.bio ? (
             <Text style={styles.bio}>{preview.profile.bio}</Text>
           ) : null}

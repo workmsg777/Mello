@@ -2,6 +2,7 @@ import { Image } from "expo-image";
 import { useEffect, useState, type PropsWithChildren } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -9,7 +10,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { absoluteMediaUrl } from "../config/api";
+import { absoluteMediaUrl, api } from "../config/api";
 import { colors } from "../theme";
 
 /** The wrapper owns its size so native image decoding never controls the card's layout. */
@@ -17,31 +18,76 @@ export function ProfilePhoto({
   url,
   style,
   children,
+  ownerPhotoId,
   accessibilityLabel = "Profile photo",
 }: PropsWithChildren<{
   url: string | null | undefined;
   style: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
+  ownerPhotoId?: string | undefined;
 }>) {
-  const uri = absoluteMediaUrl(url ?? null);
+  const [ownerUri, setOwnerUri] = useState<string>();
+  const uri = ownerPhotoId ? ownerUri : absoluteMediaUrl(url ?? null);
   const [loading, setLoading] = useState(!!uri);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     setLoading(!!uri);
     setFailed(false);
-    setAttempt(0);
   }, [uri]);
+  useEffect(() => {
+    if (!ownerPhotoId) return;
+    const request = new AbortController();
+    let objectUrl: string | undefined;
+    setOwnerUri(undefined);
+    setLoading(true);
+    setFailed(false);
+    void api
+      .get<Blob>(`/dating/photos/${ownerPhotoId}/file`, {
+        responseType: "blob",
+        signal: request.signal,
+      })
+      .then(({ data }) => {
+        if (request.signal.aborted) return;
+        if (Platform.OS === "web") {
+          objectUrl = URL.createObjectURL(data);
+          setOwnerUri(objectUrl);
+          return;
+        }
+        return new Promise<void>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result !== "string") {
+              reject(new Error("Photo could not be read"));
+              return;
+            }
+            if (!request.signal.aborted) setOwnerUri(reader.result);
+            resolve();
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(data);
+        });
+      })
+      .catch(() => {
+        if (request.signal.aborted) return;
+        setLoading(false);
+        setFailed(true);
+      });
+    return () => {
+      request.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [ownerPhotoId, attempt]);
   return (
     <View style={[styles.frame, style]}>
       {uri ? (
         <Image
-          key={`${uri}:${attempt}`}
+          key={`${ownerPhotoId ?? uri}:${attempt}`}
           source={{ uri }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
-          cachePolicy={attempt ? "none" : "memory-disk"}
-          recyclingKey={uri}
+          cachePolicy={ownerPhotoId || attempt ? "none" : "memory-disk"}
+          recyclingKey={ownerPhotoId ?? uri}
           transition={120}
           accessibilityLabel={accessibilityLabel}
           onLoadStart={() => {
@@ -55,7 +101,8 @@ export function ProfilePhoto({
           onError={(event) => {
             setLoading(false);
             setFailed(true);
-            if (__DEV__) console.warn("[Mello photo]", uri, event.error);
+            if (__DEV__ && !ownerPhotoId)
+              console.warn("[Mello photo]", uri, event.error);
           }}
         />
       ) : null}
@@ -65,7 +112,7 @@ export function ProfilePhoto({
           <ActivityIndicator color={colors.coral} />
         </View>
       ) : null}
-      {!uri || failed ? (
+      {(!uri && !loading) || failed ? (
         <View pointerEvents="box-none" style={styles.center}>
           <Text style={styles.placeholder}>♡</Text>
           {failed ? (

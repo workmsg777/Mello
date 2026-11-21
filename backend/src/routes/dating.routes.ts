@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { ownProfilePhoto } from './profile-photo-files';
 import {
   completeOnboarding,
   deletePersonalityResult,
@@ -58,6 +59,7 @@ datingRouter.put('/personality/:frameworkId', savePersonalityResult);
 datingRouter.delete('/personality/:frameworkId', deletePersonalityResult);
 
 datingRouter.get('/photos', listPhotos);
+datingRouter.get('/photos/:id/file', ownProfilePhoto);
 datingRouter.post('/photos', uploadProfilePhoto, uploadPhoto);
 datingRouter.put('/photos/order', reorderPhotos);
 datingRouter.delete('/photos/:id', deletePhoto);

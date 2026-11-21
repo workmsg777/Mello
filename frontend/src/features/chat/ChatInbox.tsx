@@ -1,4 +1,5 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { alignmentLabel } from "../discovery/alignment";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -21,6 +22,7 @@ import { colors } from "../../theme";
 import type { ChatMessage } from "../../types/chat";
 import type { Match } from "../../types/discovery";
 import type { ChatState } from "./useChat";
+import { chatApi } from "../../services/chat.service";
 
 const time = (value: string) =>
   new Date(value).toLocaleTimeString([], {
@@ -33,6 +35,7 @@ export function ChatInbox({
   activeId,
   onSelect,
   onPlan,
+  onProfile,
   chat,
   demo,
 }: {
@@ -40,6 +43,7 @@ export function ChatInbox({
   userId: string;
   activeId: string | null;
   onSelect: (match: Match | null) => void;
+  onProfile: (match: Match) => void;
   onPlan: (match: Match) => void;
   chat: ChatState;
   demo: boolean;
@@ -55,6 +59,10 @@ export function ChatInbox({
     AppState.currentState === "active",
   );
   const [submitting, setSubmitting] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggesting, setSuggesting] = useState(false);
+  const activeMatchRef = useRef(activeId);
+  activeMatchRef.current = activeId;
   const [visibleMessage, setVisibleMessage] = useState<ChatMessage | null>(
     null,
   );
@@ -90,6 +98,8 @@ export function ChatInbox({
     setError(null);
     setLoading(true);
     setDraft("");
+    setSuggestions([]);
+    setSuggesting(false);
     setVisibleMessage(null);
     void chat
       .loadHistory(activeId)
@@ -182,6 +192,22 @@ export function ChatInbox({
       setSubmitting(false);
     }
   };
+  const suggest = async () => {
+    if (!activeId || suggesting) return;
+    const requestedId = activeId;
+    setSuggesting(true);
+    try {
+      const values = demo
+        ? ["What does a great weekend look like for you?"]
+        : await chatApi.icebreakers(requestedId);
+      if (activeMatchRef.current === requestedId) setSuggestions(values);
+    } catch (caught) {
+      if (activeMatchRef.current === requestedId)
+        setError(getApiErrorMessage(caught));
+    } finally {
+      if (activeMatchRef.current === requestedId) setSuggesting(false);
+    }
+  };
   const older = async () => {
     if (!match || !chat.cursors[match.id] || loading) return;
     setLoading(true);
@@ -240,7 +266,7 @@ export function ChatInbox({
         >
           <View style={s.inboxHeading}>
             <Text style={s.inboxTitle}>Your conversations</Text>
-            <Text style={s.small}>{matches.length} connections</Text>
+            <Text style={s.small}>{matches.length} {matches.length === 1 ? "connection" : "connections"}</Text>
           </View>
           <ScrollView contentContainerStyle={{ padding: 12, gap: 6 }}>
             {ordered.map((item) => {
@@ -305,9 +331,16 @@ export function ChatInbox({
                   style={s.headerAvatar}
                 />
                 <View style={{ flex: 1 }}>
-                  <Text numberOfLines={1} style={s.name}>
-                    {match.person.profile.displayName}
-                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="View match profile and options"
+                    onPress={() => onProfile(match)}
+                  >
+                    <Text numberOfLines={1} style={s.name}>
+                      {match.person.profile.displayName} ›
+                    </Text>
+                  </Pressable>
+                  <Text style={s.small}>{alignmentLabel(match.person)}</Text>
                   <Text style={s.small}>
                     {demo
                       ? "Design preview · messages stay on this page"
@@ -409,6 +442,35 @@ export function ChatInbox({
                   <Ionicons name="arrow-up" size={24} color="white" />
                 </Pressable>
               </View>
+              <Pressable
+                accessibilityRole="button"
+                disabled={suggesting}
+                onPress={() => void suggest()}
+                style={{ paddingHorizontal: 20, paddingVertical: 8 }}
+              >
+                <Text style={s.retry}>
+                  {suggesting
+                    ? "Finding a conversation starter…"
+                    : "Suggest a conversation starter"}
+                </Text>
+              </Pressable>
+              {suggestions.map((text) => (
+                <Pressable
+                  key={text}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Use draft: ${text}`}
+                  onPress={() => {
+                    if (!draft.trim()) {
+                      edit(text);
+                      setSuggestions([]);
+                    }
+                  }}
+                  disabled={!!draft.trim()}
+                  style={{ paddingHorizontal: 20, paddingVertical: 6 }}
+                >
+                  <Text style={s.welcomeCopy}>{text}</Text>
+                </Pressable>
+              ))}
               <Text style={s.footer}>
                 {draft.length > 1800 ? `${draft.length}/2000 · ` : ""}Be
                 curious. Be kind. Be yourself.

@@ -81,11 +81,11 @@ export class UserPhotoService {
           { transaction },
         );
       });
-      return this.list(userId);
     } catch (error) {
       await unlink(file.path).catch(() => undefined);
       throw error;
     }
+    return this.list(userId);
   }
 
   async remove(userId: string, photoId: string): Promise<void> {

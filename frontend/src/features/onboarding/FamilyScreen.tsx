@@ -5,6 +5,7 @@ import {
   PrimaryButton,
 } from "../../components/ui";
 import { datingApi } from "../../services/dating.service";
+import { usePartnerOptions } from "./PartnerOptionChoices";
 import { CategoryPicker, categoryInitial } from "./CategoryPicker";
 import { useOnboarding } from "./useOnboarding";
 
@@ -20,16 +21,22 @@ export function FamilyScreen() {
   const [selected, setSelected] = useState(() =>
     categoryInitial(codes, catalog, state),
   );
+  const partnerOptions = usePartnerOptions(catalog, state, [
+    "FAMILY_PLAN",
+    "RELATIONSHIP_STYLE",
+  ]);
   const save = async () => {
     for (const category of catalog.profileOptionCategories.filter((c) =>
       codes.includes(c.code),
     )) {
       await datingApi.profileOptions(category.id, selected[category.id] ?? []);
-      await datingApi.visibility(
-        category.code,
-        category.isSensitive ? "MATCHING_ONLY" : "PROFILE",
-      );
+      if (!state.visibility.some((v) => v.fieldCode === category.code))
+        await datingApi.visibility(
+          category.code,
+          category.isSensitive ? "MATCHING_ONLY" : "PROFILE",
+        );
     }
+    await partnerOptions.save();
   };
   return (
     <OnboardingShell
@@ -52,6 +59,7 @@ export function FamilyScreen() {
         state={state}
         onChange={setSelected}
       />
+      {partnerOptions.controls}
       <ErrorNotice message={error} />
     </OnboardingShell>
   );

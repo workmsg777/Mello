@@ -120,6 +120,7 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
     <View style={styles.fieldWrap}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
+        accessibilityLabel={label}
         placeholderTextColor={colors.muted}
         style={[styles.input, props.multiline && styles.multiline]}
         {...props}
@@ -139,6 +140,11 @@ export function ChoiceChip({
 }) {
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      {...(Platform.OS === "web"
+        ? { "aria-pressed": selected }
+        : { accessibilityState: { selected } })}
       onPress={onPress}
       style={[styles.chip, selected && styles.chipSelected]}
     >

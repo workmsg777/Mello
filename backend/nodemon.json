@@ -1,0 +1,9 @@
+{
+  "watch": ["src", "database", "scripts", "tsconfig.json"],
+  "ext": "ts,js,cjs,mjs,json",
+  "execMap": {
+    "ts": "node --import tsx"
+  },
+  "delay": 300,
+  "signal": "SIGTERM"
+}

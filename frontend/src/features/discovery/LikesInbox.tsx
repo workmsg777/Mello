@@ -11,6 +11,7 @@ import { ProfilePhoto } from "../../components/ProfilePhoto";
 import { PrimaryButton } from "../../components/ui";
 import { colors } from "../../theme";
 import type { DiscoveryCard, IncomingLike } from "../../types/discovery";
+import { alignmentLabel } from "./alignment";
 
 export function LikesInbox({
   people,
@@ -82,6 +83,9 @@ export function LikesInbox({
                   </ProfilePhoto>
                 </Pressable>
                 <View style={s.body}>
+                  <Text style={{ color: colors.plum, fontWeight: "700" }}>
+                    {alignmentLabel(person)}
+                  </Text>
                   <Text numberOfLines={2} style={s.bio}>
                     {person.profile.bio ||
                       "Something lovely could start with a mutual spark."}

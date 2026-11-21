@@ -1,3 +1,8 @@
+import {
+  displayablePhotoStatus,
+  displayableText,
+  publicFields,
+} from './public-display';
 import { DatingCatalogService } from './dating-catalog.service';
 import {
   UserLanguagePreferenceService,
@@ -103,31 +108,27 @@ export class DatingStateService {
     };
   }
 
-  async getPreview(userId: string) {
+  async getPreview(userId: string, catalogRequest = this.catalogService.get()) {
+    const visibleFields = publicFields(
+      await this.visibilityService.list(userId),
+    );
     const [
       profile,
       profileOptions,
-      visibility,
       interests,
       languages,
       promptAnswers,
       photos,
       catalog,
     ] = await Promise.all([
-      this.profileService.getPublic(userId),
+      this.profileService.getPublic(userId, undefined, visibleFields),
       this.profileOptionService.list(userId),
-      this.visibilityService.list(userId),
       this.interestService.list(userId),
       this.languageService.list(userId),
       this.promptAnswerService.list(userId),
       this.photoService.list(userId),
-      this.catalogService.get(),
+      catalogRequest,
     ]);
-    const visibleFields = new Set(
-      visibility
-        .filter(({ visibility: mode }) => mode === 'PROFILE')
-        .map(({ fieldCode }) => fieldCode),
-    );
     const optionById = new Map(
       catalog.profileOptions.map((option) => [option.id, option]),
     );
@@ -149,7 +150,13 @@ export class DatingStateService {
 
     return {
       profile,
-      photos: [...photos]
+      photos: photos
+        .filter(
+          (photo) =>
+            visibleFields.has('PHOTOS') &&
+            photo.moderationStatus === displayablePhotoStatus &&
+            photo.url,
+        )
         .sort(
           (a, b) =>
             Number(b.isPrimary) - Number(a.isPrimary) ||
@@ -175,11 +182,11 @@ export class DatingStateService {
           };
         })
         .filter((item) => item !== null),
-      interests: interests
+      interests: (visibleFields.has('INTERESTS') ? interests : [])
         .map(({ interestId }) => interestById.get(interestId))
         .filter((item) => item !== undefined)
         .map(({ id, code, name }) => ({ id, code, name })),
-      languages: languages
+      languages: (visibleFields.has('LANGUAGES') ? languages : [])
         .map((selection) => {
           const language = languageById.get(selection.languageId);
           return language
@@ -193,6 +200,11 @@ export class DatingStateService {
         })
         .filter((item) => item !== null),
       prompts: promptAnswers
+        .filter(
+          (answer) =>
+            visibleFields.has('PROMPTS') &&
+            displayableText(answer.moderationStatus),
+        )
         .map((answer) => {
           const prompt = promptById.get(answer.promptId);
           return prompt

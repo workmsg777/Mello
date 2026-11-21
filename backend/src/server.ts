@@ -17,6 +17,7 @@ import {
   notificationChannel,
 } from './notifications/gateway';
 import { startNotificationWorker } from './notifications/worker';
+import { startPhotoModeration } from './services/dating/photo-moderation';
 
 const port = Number(process.env.PORT ?? 3000);
 
@@ -50,6 +51,7 @@ async function start(): Promise<void> {
     }
   });
   await notificationSub.subscribe(notificationChannel);
+  const stopPhotoModeration = startPhotoModeration();
   const stopNotifications =
     process.env.NOTIFICATION_WORKER_ENABLED === 'false'
       ? async () => {}
@@ -60,7 +62,7 @@ async function start(): Promise<void> {
 
   const shutdown = (): void => {
     io.close(() => {
-      void stopNotifications()
+      void Promise.allSettled([stopNotifications(), stopPhotoModeration()])
         .then(() =>
           Promise.allSettled([
             notificationSub.quit(),

@@ -1,0 +1,38 @@
+{
+  "file": "C:\\Users\\u21ec\\Desktop\\mello\\outputs\\01a192d1-2f30-7532-a754-39dbb9ba9e30\\Matching-QA.xlsx",
+  "sheets": [
+    "Users & Credentials",
+    "Run Guide",
+    "System Flow",
+    "Data & Credentials",
+    "Access & Eligibility",
+    "Discovery Feed",
+    "Rules Ranking",
+    "Consent & Privacy",
+    "Likes & Matches",
+    "Chat & Receipts",
+    "Realtime",
+    "Notifications",
+    "Impressions & Metrics",
+    "AI Service",
+    "Conversation Assist",
+    "Performance & Setup",
+    "Integration Regression"
+  ],
+  "users": 10000,
+  "totalCases": 134,
+  "counts": {
+    "PASS": 107,
+    "FAIL": 1,
+    "BLOCKED": 3,
+    "NOT RUN": 23
+  },
+  "unclassified": 0,
+  "independentCountsMatch": true,
+  "statusChangeRecalculationVerified": true,
+  "blankStatusDetectionVerified": true,
+  "formulaErrorScan": "{\"kind\":\"notice\",\"message\":\"Cell search matched 0 entries.\"}",
+  "renderedSheets": 17,
+  "generatedAt": "2026-11-01T17:59:28.420Z",
+  "polished": true
+}

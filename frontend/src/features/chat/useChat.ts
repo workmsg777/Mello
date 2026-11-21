@@ -15,6 +15,7 @@ export function useChat(
   userId: string | undefined,
   demo: boolean,
   onMatched: () => void,
+  onExcluded: () => void,
 ) {
   const [messages, setMessages] = useState<Record<string, ChatMessage[]>>({});
   const [summaries, setSummaries] = useState<ConversationSummary[]>([]);
@@ -30,6 +31,8 @@ export function useChat(
   const sending = useRef(new Set<string>());
   const writeQueue = useRef<Promise<unknown>>(Promise.resolve());
   const deliveryQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const exclusionRef = useRef(onExcluded);
+  exclusionRef.current = onExcluded;
   const matchedRef = useRef(onMatched);
   matchedRef.current = onMatched;
   const key = `mello.chat.outbox.v1.${userId}`;
@@ -299,6 +302,10 @@ export function useChat(
     });
     socket.on("chat:matched", sync);
     socket.on("discovery:liked", sync);
+    socket.on("discovery:refresh", () => {
+      void refresh();
+      exclusionRef.current();
+    });
     void (async () => {
       try {
         const saved = JSON.parse(

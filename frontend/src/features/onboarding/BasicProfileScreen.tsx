@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Switch, Text, View } from "react-native";
 import {
   ErrorNotice,
   Field,
@@ -14,6 +15,12 @@ export function BasicProfileScreen() {
   const [displayName, setDisplayName] = useState(profile?.displayName ?? "");
   const [dateOfBirth, setDateOfBirth] = useState(profile?.dateOfBirth ?? "");
   const [jobTitle, setJobTitle] = useState(profile?.jobTitle ?? "");
+  const savedJobVisibility = state.visibility.find(
+    (field) => field.fieldCode === "JOB",
+  )?.visibility;
+  const [showJobTitle, setShowJobTitle] = useState(
+    savedJobVisibility === "PROFILE",
+  );
   const [height, setHeight] = useState(profile?.heightCm?.toString() ?? "");
   const valid =
     displayName.trim().length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth);
@@ -28,18 +35,28 @@ export function BasicProfileScreen() {
           disabled={!valid}
           loading={busy}
           onPress={() =>
-            void finish("BASIC_PROFILE", "/onboarding/identity", false, () =>
-              datingApi.profile({
-                displayName: displayName.trim(),
-                dateOfBirth,
-                bio: profile?.bio ?? null,
-                heightCm: height ? Number(height) : null,
-                jobTitle: jobTitle.trim() || null,
-                companyName: profile?.companyName ?? null,
-                schoolName: profile?.schoolName ?? null,
-                currentCityId: profile?.currentCityId ?? null,
-                hometownCityId: profile?.hometownCityId ?? null,
-              }),
+            void finish(
+              "BASIC_PROFILE",
+              "/onboarding/identity",
+              false,
+              async () => {
+                await datingApi.profile({
+                  displayName: displayName.trim(),
+                  dateOfBirth,
+                  bio: profile?.bio ?? null,
+                  heightCm: height ? Number(height) : null,
+                  jobTitle: jobTitle.trim() || null,
+                  companyName: profile?.companyName ?? null,
+                  schoolName: profile?.schoolName ?? null,
+                  currentCityId: profile?.currentCityId ?? null,
+                  hometownCityId: profile?.hometownCityId ?? null,
+                });
+                if (showJobTitle !== (savedJobVisibility === "PROFILE"))
+                  await datingApi.visibility(
+                    "JOB",
+                    showJobTitle ? "PROFILE" : "PRIVATE",
+                  );
+              },
             )
           }
         />
@@ -67,6 +84,21 @@ export function BasicProfileScreen() {
         placeholder="Product designer"
         maxLength={150}
       />
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <Text>Show job title on my public profile</Text>
+        <Switch
+          accessibilityLabel="Show job title on my public profile"
+          value={showJobTitle}
+          onValueChange={setShowJobTitle}
+        />
+      </View>
       <Field
         label="Height in cm (optional)"
         value={height}

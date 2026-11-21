@@ -9,7 +9,7 @@ Mello is an Expo dating app with a separate partner app for cafés, restaurants 
 - When fresh suggestions run out, Discover automatically reshuffles previously passed profiles. Already liked profiles and mutual matches remain excluded.
 - **Liked you** shows incoming likes with Like back and Pass. Only two explicit likes unlock chat; a single like stays pending.
 - Chat is the primary next step after matching: an inbox, real-time text messages over authenticated WebSockets, unread counts, typing indicators, read receipts and saved history. Unsent messages and drafts are saved locally for retries.
-- Clearly labelled demo compatibility percentages (the real matching algorithm is intentionally deferred).
+- Consent-aware reciprocal profile-alignment ranking, stable ranked discovery pages and optional Python semantic reranking. See [the matching guide](backend/docs/matching.md).
 - Nearby published venues, date invitations, acceptance/cancellation and partner confirmation.
 - Partner business registration, listing drafts/publication, pricing, photos by HTTPS URL, and a date-request inbox.
 - Partner admins can register support employees who verify their own OTP before managing café menus/photos, plans, packages and events. Roles and supported city/state mappings come from central enums; choosing a city fills its state. See [the partner team guide](backend/docs/partner-team-and-content.md).
@@ -29,13 +29,15 @@ Open http://127.0.0.1:8081/preview. This is an explicitly labelled interactive p
 
 1. Install Node 22.13 or newer and Docker Desktop.
 2. Copy backend/.env.example to backend/.env. Replace JWT_SECRET, OTP_HASH_SECRET and PLATFORM_SIGNUP_SECRET with independent random values. Keep development OTP exposure local only.
-3. In backend/, run: docker compose up --build
-4. PostgreSQL, Redis and the API start together. Migrations and seed catalogs run automatically. The API defaults to port 4000; uploaded photos have a persistent Docker volume.
+3. In `backend/`, run `docker compose up --build`.
+4. The Node API and Python matching service start in the same container. Compose also starts PostgreSQL and Redis. Migrations and seed catalogs run automatically. The API defaults to port 4000, and uploaded photos have a persistent Docker volume. See the [AI deployment settings](backend/docs/matching.md#ai-deployment) to enable semantic matching.
 5. Copy frontend/.env.example to frontend/.env. Leave EXPO_PUBLIC_API_URL empty to detect the Expo computer's LAN host automatically during development. For another API host, an Expo tunnel, or production, set an explicit URL reachable from the device.
 6. In frontend/, run npm ci --legacy-peer-deps, then npm start. Use Expo Go on the same Wi-Fi network, or npm run web for the browser.
 7. Repeat environment setup and npm ci / npm start in frontend/apps/partner/ to run the separate partner app.
 
 If PostgreSQL and Redis are already installed, run npm ci, npm run db:migrate, npm run db:seed and npm run dev from backend/ instead of Docker.
+
+Nodemon reloads the Node API after backend code changes in both Compose and `npm run dev`. Compose mounts the local backend code into the container and polls for edits on Docker Desktop. Rebuild after changing dependencies. Apply new database migrations with `docker compose exec backend npm run db:migrate`.
 
 ## Test the complete journey
 
@@ -52,6 +54,8 @@ From backend/, run `docker compose exec backend npm run db:seed:demo -- --city C
 
 This creates 22 adult profiles: 10 women, 10 straight men and 2 additional gay men, with completed onboarding and three locally generated illustrated photos each. Names and bios clearly mark them as fictional demo data. Discovery still respects mutual gender and age preferences. Demo profiles do not automatically like anyone. Use two accounts and explicitly like each other to test matching; only a mutual like opens chat. No phone identities are created and no SMS is sent. The command is safe to rerun and refuses production mode. Photos use the persistent uploads volume alongside user uploads.
 
+The fictional profiles opt in to personalized matching so you can test alignment percentages. Turn on **Personalized matching** in Discover on your own test account. Rerun the seed to enable percentages for demo profiles created before this setting was added.
+
 ## Checks
 
     cd backend
@@ -67,8 +71,10 @@ This creates 22 adult profiles: 10 women, 10 straight men and 2 additional gay m
 
 The integration tests use an isolated embedded PostgreSQL instance and test accounts, not your configured database. They require permission to bind local sockets. API details are in backend/docs/discovery-and-dates-api.md. Chat architecture and event contracts are in [backend/docs/chat.md](backend/docs/chat.md).
 
+For optional matching QA, `testing/matching` provides a separate PostgreSQL fixture with 10,000 fictional profiles, scripts to exercise the API, and saved test results. The normal backend startup runs independently of this fixture. [Matching QA setup](testing/matching/README.md)
+
 ## Before a public launch
 
-For real SMS, set OTP_DELIVERY_MODE=twilio and configure TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_MESSAGING_SERVICE_SID (or TWILIO_FROM_NUMBER) in backend/.env. Set OTP_EXPOSE_IN_RESPONSE=false in production. The Twilio adapter has mocked contract tests; actual carrier delivery requires your configured provider account and sender. Console delivery remains available for local development. Compatibility scores are UI demonstrations, not a validated matching algorithm. Date plans use manual partner confirmation; payments, chat attachments, push notifications, inventory/capacity, moderation and identity verification are not included in this milestone. Preview photos use remote sample imagery; real profiles use the user's uploaded photos. Physical Android/iOS testing and production PostgreSQL concurrency checks remain necessary.
+For real SMS, set OTP_DELIVERY_MODE=twilio and configure TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_MESSAGING_SERVICE_SID (or TWILIO_FROM_NUMBER) in backend/.env. Set OTP_EXPOSE_IN_RESPONSE=false in production. The Twilio adapter has mocked contract tests; actual carrier delivery requires your configured provider account and sender. Console delivery remains available for local development. Real discovery uses profile-alignment scores, not validated relationship-success probabilities; interactive preview scores remain labelled demos. Optional AI requires a configured model service and independent evaluation. Date plans use manual partner confirmation; payments, chat attachments, push notifications, inventory/capacity, moderation and identity verification are not included in this milestone. Preview photos use remote sample imagery; real profiles use the user's uploaded photos. Physical Android/iOS testing and production PostgreSQL concurrency checks remain necessary.
 
 Notification inboxes and push delivery: see [the implementation and deployment guide](backend/docs/notifications.md). Both apps have a notification bell for chat, dates and venue updates, plus nearby published package/event announcements.

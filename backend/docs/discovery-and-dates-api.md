@@ -9,6 +9,8 @@ Prefix: `/api/discovery`. Only dating users with a completed, active profile can
 | Method | Path                              | Behaviour                                                                                                                      |
 | ------ | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | GET    | `/feed?limit=10&offset=0`         | Fresh public profiles first; once exhausted, shuffled previously passed profiles. Already liked profiles and mutual matches stay excluded. |
+| PUT | `/exclusions/:targetId` | Permanently hide the pair in both directions, including existing matches and chat. |
+| PUT | `/matches/:matchId/feedback` | Submit a private optional `{ worthwhile: boolean }` response for your own match. |
 | POST   | `/actions`                        | `{ targetId, action: "LIKE" or "PASS" }`; reciprocal likes return `{ matched: true, matchId }`.                                |
 | GET    | `/matches`                        | Mutual matches, newest first, with public profiles.                                                                            |
 | GET    | `/venues?kind=CAFE`               | Published, active venues in the user's selected city and country. Kind is optional: CAFE, RESTAURANT, ACTIVITY.                |
@@ -16,11 +18,13 @@ Prefix: `/api/discovery`. Only dating users with a completed, active profile can
 | POST   | `/matches/:matchId/plans`         | `{ partnerId, proposedAt, note? }`. ISO 8601 timestamp with timezone; at least 15 minutes ahead, within 180 days.              |
 | PATCH  | `/matches/:matchId/plans/:planId` | `{ status: "ACCEPTED", "DECLINED", or "CANCELLED" }`. Only the invited person can accept or decline. Either person can cancel. |
 
-Discovery checks both people's age and gender preferences and option dealbreakers. Distance restrictions use city-centre coordinates; without coordinates a strict distance restriction falls back to the same city. There is no identity verification system yet: a `verifiedProfilesOnly` restriction therefore returns no unverified candidates. Profiles without the configured minimum number of photos are excluded.
+Discovery checks both people's age and gender preferences and option dealbreakers. Distance restrictions use city-centre coordinates; without coordinates a strict distance restriction falls back to the same city. There is no identity verification system yet: a `verifiedProfilesOnly` restriction therefore returns no unverified candidates. Both people need the configured minimum number of approved, public photos.
+
+An empty feed sets `needsApprovedPhotos` when the viewer needs more approved, public photos. The dating app uses this flag to show a link to photo management.
 
 Discovery returns `feedMode: "FRESH" | "RECYCLED"`, `shuffleSeed`, `nextCursor` and `nextOffset` alongside `profiles`. The app automatically fetches another batch after the last card is answered, using offset zero for fresh profiles so removed decisions do not cause skips. In recycled mode, pass the returned `shuffleSeed` and `after=nextCursor` to continue a shuffled round without repeats. When `nextCursor` is null, omit the cycle parameters to begin a new shuffled round. Fresh profiles always take priority, including during a recycled round. Existing age, gender, distance and account eligibility checks apply to both modes. A previous PASS may become a LIKE; an existing LIKE cannot be changed to a PASS through this endpoint. Chat still requires two explicit likes.
 
-Compatibility is deliberately illustrative. The response includes `compatibility: { percentage, isDemo: true, label: "Demo compatibility" }`. A stable symmetric placeholder lives in `src/services/discovery.rules.ts`; it is not used for ranking, eligibility or personal-data inference. Replace this boundary when the actual algorithm is approved.
+Discovery now returns a nullable `ranking.score`, evidence `coverage`, `mode`, `version` and public-safe `reasons`. Scores require both people's latest current-policy personalization consent. They express profile alignment, not relationship-success probability. Fresh candidates are ranked before paging. Continue fresh pages with `feedSessionId` and `cursor=nextRankCursor`; existing shuffle cursors remain for recycled passes. `POST /api/discovery/impressions` records owner-bound, deduplicated client-reported card exposures. Full contracts, reciprocal language/value filters, optional Python AI, fallback behavior and rollout settings: [the matching guide](matching.md).
 
 Ordered user-row locks and a unique canonical pair prevent duplicate matches during reciprocal likes. Profile DTOs omit birthdays, contact information, consents and private preferences. Sensitive option answers appear only when marked `PROFILE`.
 

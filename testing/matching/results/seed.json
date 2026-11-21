@@ -1,0 +1,33 @@
+{
+  "count": 10000,
+  "distinctUsers": 10000,
+  "seededAt": "2026-11-01T17:50:21.531Z",
+  "elapsedMs": 50125,
+  "database": "mello_qa_10000",
+  "synthetic": true,
+  "namespace": "mello:qa:10000:v1",
+  "previousCount": 10000,
+  "idempotencyVerified": true,
+  "cohorts": [
+    {
+      "scenario": "ACTIVE_PROFILE",
+      "total": 9796
+    },
+    {
+      "scenario": "INCOMPLETE_ONBOARDING",
+      "total": 51
+    },
+    {
+      "scenario": "INSUFFICIENT_PHOTOS",
+      "total": 51
+    },
+    {
+      "scenario": "SUSPENDED_ACCOUNT",
+      "total": 51
+    },
+    {
+      "scenario": "VERIFIED_ONLY_EMPTY",
+      "total": 51
+    }
+  ]
+}

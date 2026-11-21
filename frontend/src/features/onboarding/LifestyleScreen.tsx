@@ -5,6 +5,7 @@ import {
   PrimaryButton,
 } from "../../components/ui";
 import { datingApi } from "../../services/dating.service";
+import { usePartnerOptions } from "./PartnerOptionChoices";
 import { CategoryPicker, categoryInitial } from "./CategoryPicker";
 import { useOnboarding } from "./useOnboarding";
 
@@ -14,13 +15,19 @@ export function LifestyleScreen() {
   const [selected, setSelected] = useState(() =>
     categoryInitial(codes, catalog, state),
   );
+  const partnerOptions = usePartnerOptions(catalog, state, [
+    "EXERCISE",
+    "PETS",
+  ]);
   const save = async () => {
     for (const category of catalog.profileOptionCategories.filter((c) =>
       codes.includes(c.code),
     )) {
       await datingApi.profileOptions(category.id, selected[category.id] ?? []);
-      await datingApi.visibility(category.code, "PROFILE");
+      if (!state.visibility.some((v) => v.fieldCode === category.code))
+        await datingApi.visibility(category.code, "PROFILE");
     }
+    await partnerOptions.save();
   };
   return (
     <OnboardingShell
@@ -41,6 +48,7 @@ export function LifestyleScreen() {
         state={state}
         onChange={setSelected}
       />
+      {partnerOptions.controls}
       <ErrorNotice message={error} />
     </OnboardingShell>
   );

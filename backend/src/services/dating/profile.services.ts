@@ -3,6 +3,9 @@ import type { Transaction } from 'sequelize';
 import { sequelize } from '../../config/database';
 import { datingProfileConfig } from '../../config/datingProfile';
 import Errors from '../../errors';
+import type { IntentionSettings } from '../../utils/queryValidators/datingQueryValidator';
+import { UserProfileOptionPreferenceService } from './preference.services';
+import { displayableText, publicFields } from './public-display';
 import type { UserProfile } from '../../models';
 import {
   UserInterestRepository,
@@ -114,10 +117,10 @@ export class UserProfileVisibilityService {
     transaction?: Transaction,
   ): Promise<Set<string>> {
     const records = await this.repository.findAll({
-      where: { userId, visibility: 'PROFILE' },
+      where: { userId },
       ...withTransaction(transaction),
     });
-    return new Set(records.map((record) => record.fieldCode));
+    return publicFields(records);
   }
 
   async list(userId: string) {
@@ -203,28 +206,31 @@ export class UserProfileService {
   async getPublic(
     userId: string,
     transaction?: Transaction,
+    fields?: ReadonlySet<string>,
   ): Promise<PublicDatingProfileDto> {
     const profile = await this.repository.findOne({
       where: { userId },
       ...withTransaction(transaction),
     });
     if (!profile) throw new Errors.NotFoundError('Dating profile not found');
-    const visible = await this.visibilityService.profileVisibleFields(
-      userId,
-      transaction,
-    );
+    const visible =
+      fields ??
+      (await this.visibilityService.profileVisibleFields(userId, transaction));
     const dto: PublicDatingProfileDto = {
       id: profile.id,
       displayName: profile.displayName,
       age: this.calculateAge(profile.dateOfBirth),
-      bio: profile.bio,
+      bio:
+        visible.has('BIO') && displayableText(profile.bioModerationStatus)
+          ? profile.bio
+          : null,
       profileStatus: profile.profileStatus,
     };
     if (visible.has('HEIGHT')) dto.heightCm = profile.heightCm;
     if (visible.has('JOB')) dto.jobTitle = profile.jobTitle;
     if (visible.has('COMPANY')) dto.companyName = profile.companyName;
     if (visible.has('SCHOOL')) dto.schoolName = profile.schoolName;
-    if (profile.currentCityId)
+    if (profile.currentCityId && visible.has('CURRENT_CITY'))
       dto.currentCity = await this.cityService.getPublic(
         profile.currentCityId,
         transaction,
@@ -245,11 +251,15 @@ export class UserProfileService {
       displayName: profile.displayName,
       dateOfBirth: profile.dateOfBirth,
       bio: profile.bio,
+      preferSharedIntention: profile.preferSharedIntention,
       heightCm: profile.heightCm,
       jobTitle: profile.jobTitle,
       companyName: profile.companyName,
       schoolName: profile.schoolName,
       currentCityId: profile.currentCityId,
+      currentCity: profile.currentCityId
+        ? await this.cityService.findPublic(profile.currentCityId)
+        : null,
       hometownCityId: profile.hometownCityId,
       bioModerationStatus: profile.bioModerationStatus,
       profileStatus: profile.profileStatus,
@@ -344,12 +354,48 @@ export class UserProfileOptionService {
     userId: string,
     categoryId: string,
     selections: ProfileOptionSelection[],
+    settings?: IntentionSettings,
   ): Promise<void> {
     await sequelize.transaction(async (transaction) => {
       const category = await this.categoryService.getActive(
         categoryId,
         transaction,
       );
+      if (settings && category.code !== 'DATING_INTENTION')
+        throw new Errors.BadRequestError(
+          'Goal settings apply only to dating intentions',
+        );
+      if (settings) {
+        await sequelize.query(
+          `UPDATE user_profiles SET prefer_shared_intention=:prefer WHERE user_id=:userId`,
+          {
+            replacements: { userId, prefer: settings.strength !== 'OPEN' },
+            transaction,
+          },
+        );
+        await new UserProfileVisibilityService().set(
+          userId,
+          category.code,
+          settings.visibility,
+          transaction,
+        );
+        await new UserProfileOptionPreferenceService().replaceCategory(
+          userId,
+          categoryId,
+          settings.strength === 'OPEN'
+            ? []
+            : settings.partnerOptionIds.map((optionId) => ({
+                optionId,
+                isDealbreaker: settings.strength === 'REQUIRE',
+              })),
+          transaction,
+        );
+      } else if (category.code === 'DATING_INTENTION') {
+        await sequelize.query(
+          `INSERT INTO user_profile_visibility(id,user_id,field_code,visibility,created_at,updated_at) VALUES (:id,:userId,'DATING_INTENTION','MATCHING_ONLY',now(),now()) ON CONFLICT(user_id,field_code) DO NOTHING`,
+          { replacements: { id: randomUUID(), userId }, transaction },
+        );
+      }
       const uniqueIds = [
         ...new Set(selections.map(({ optionId }) => optionId)),
       ];
